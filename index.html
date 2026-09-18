@@ -2549,7 +2549,9 @@ const waveCtx = waveCanvas.getContext("2d");
 // Bump this on every meaningful change so a returning diagnostics/CSV export
 // can be tied to the exact code that produced it — see rom-web-spike-howto.md
 // for the shared versioning convention across all three spike tools.
-const APP_VERSION = "1.7.0";
+const APP_VERSION = "1.7.1"; // 1.7.1: always attempt torch on the back camera regardless of
+// getCapabilities() reporting (Android/Brave under-reports it), and hold a
+// Screen Wake Lock during capture so the display doesn't dim/lock mid-trial.
 function detectPlatform(ua) {
   if (/iPad|iPhone|iPod/.test(ua)) return "iOS";
   if (/Android/.test(ua)) return "Android";
@@ -2631,6 +2633,40 @@ async function openCamera() {
 
 function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 
+// ---- Screen Wake Lock ----
+// Prevents the screen from dimming/locking mid-capture (seen on Android,
+// where the OS's own sleep timer wins even with the tab in the foreground;
+// iOS Safari doesn't need this — reported as working fine already).
+// Best-effort: unsupported browsers just fall back to the old behavior.
+let wakeLock = null;
+async function acquireWakeLock() {
+  if (!("wakeLock" in navigator)) {
+    diag("Screen Wake Lock API not supported in this browser — screen may dim/lock during capture.");
+    return;
+  }
+  try {
+    wakeLock = await navigator.wakeLock.request("screen");
+    diag("Screen wake lock acquired — screen will stay on during capture.");
+    wakeLock.addEventListener("release", () => diag("Screen wake lock released."));
+  } catch (err) {
+    diag("Screen wake lock request failed: " + err.name + " " + err.message);
+  }
+}
+async function releaseWakeLock() {
+  if (wakeLock) {
+    try { await wakeLock.release(); } catch (err) {}
+    wakeLock = null;
+  }
+}
+// The OS/browser auto-releases the wake lock when the tab is hidden (e.g. a
+// brief app switch); re-acquire it on return if a capture is still running,
+// so a 60s+ trial doesn't end up dimming partway through anyway.
+document.addEventListener("visibilitychange", async () => {
+  if (document.visibilityState === "visible" && captureState === "running" && wakeLock === null) {
+    await acquireWakeLock();
+  }
+});
+
 // Best-effort only: most browsers (iOS Safari especially) don't support any of
 // these constraints and will just ignore/reject them. That's fine — the page
 // still works, it just can't fight auto-exposure/white-balance on those browsers.
@@ -2650,7 +2686,14 @@ async function tryLockCameraForPPG(track) {
   const caps = track.getCapabilities ? track.getCapabilities() : {};
   diag("Camera capabilities: " + JSON.stringify(caps));
   let torchOn = false;
-  if (lightMode === "back" && caps.torch) {
+  if (lightMode === "back") {
+    // Some browsers (seen on Android/Brave) don't list `torch` in
+    // getCapabilities() even though applyConstraints({torch:true}) still
+    // works — the capability report is unreliable, not the hardware. Always
+    // attempt it on the back camera regardless of what caps.torch says, and
+    // only fall back to "turn it on manually" if the constraint itself
+    // throws.
+    if (!caps.torch) diag("torch not reported in this browser's camera capabilities — attempting it anyway.");
     try {
       await track.applyConstraints({ advanced: [{ torch: true }] });
       torchOn = true;
@@ -2658,8 +2701,6 @@ async function tryLockCameraForPPG(track) {
     } catch (err) {
       diag("torch constraint rejected: " + err.name + " " + err.message + " — turn the flashlight on manually.");
     }
-  } else if (lightMode === "back") {
-    diag("torch not in this browser's camera capabilities — turn the flashlight on manually.");
   }
 
   const advanced = [];
@@ -2827,6 +2868,7 @@ function startCapture() {
   $("h_abortCapBtn").disabled = false;
   if (lightMode === "front" && $("h_lightPanelChk").checked) document.body.classList.add("lightpanel");
   diag("Capture started. durationMs=" + captureDurationMs);
+  acquireWakeLock();
   sampleLoop();
   liveUpdateTimer = setInterval(updateLiveReadout, 1000);
 }
@@ -2928,6 +2970,7 @@ function resetCapture() {
   $("h_ampMeterFill").style.background = "var(--muted)";
   $("h_ampMeterCaption").textContent = "—";
   diag("Capture reset/aborted. samples collected=" + samples.length);
+  releaseWakeLock();
 }
 
 function finishCapture() {
@@ -2937,6 +2980,7 @@ function finishCapture() {
   $("h_startCapBtn").disabled = false;
   $("h_abortCapBtn").disabled = true;
   diag("Capture finished. total samples=" + samples.length);
+  releaseWakeLock();
 
   const pulse = analyzePulse(samples);
   const resp = analyzeRespiration(samples);
@@ -4439,7 +4483,9 @@ const waveCtx = waveCanvas.getContext("2d");
 // Independent versioning track from the original heart-breath-signal tool —
 // this is a separate experimental pipeline being A/B tested against it, not a
 // successor. See rom-web-spike-howto.md for the shared versioning convention.
-const APP_VERSION = "1.2.0";
+const APP_VERSION = "1.2.1"; // 1.2.1: always attempt torch regardless of getCapabilities()
+// reporting (Android/Brave under-reports it), and hold a Screen Wake Lock
+// during capture so the display doesn't dim/lock mid-trial.
 function detectPlatform(ua) {
   if (/iPad|iPhone|iPod/.test(ua)) return "iOS";
   if (/Android/.test(ua)) return "Android";
@@ -4512,20 +4558,57 @@ async function openCamera() {
   }
 }
 function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+
+// ---- Screen Wake Lock ----
+// Prevents the screen from dimming/locking mid-capture (seen on Android,
+// where the OS's own sleep timer wins even with the tab in the foreground;
+// iOS Safari doesn't need this — reported as working fine already).
+// Best-effort: unsupported browsers just fall back to the old behavior.
+let wakeLock = null;
+async function acquireWakeLock() {
+  if (!("wakeLock" in navigator)) {
+    diag("Screen Wake Lock API not supported in this browser — screen may dim/lock during capture.");
+    return;
+  }
+  try {
+    wakeLock = await navigator.wakeLock.request("screen");
+    diag("Screen wake lock acquired — screen will stay on during capture.");
+    wakeLock.addEventListener("release", () => diag("Screen wake lock released."));
+  } catch (err) {
+    diag("Screen wake lock request failed: " + err.name + " " + err.message);
+  }
+}
+async function releaseWakeLock() {
+  if (wakeLock) {
+    try { await wakeLock.release(); } catch (err) {}
+    wakeLock = null;
+  }
+}
+// The OS/browser auto-releases the wake lock when the tab is hidden (e.g. a
+// brief app switch); re-acquire it on return if a capture is still running,
+// so a 25-60s+ trial doesn't end up dimming partway through anyway.
+document.addEventListener("visibilitychange", async () => {
+  if (document.visibilityState === "visible" && captureState === "running" && wakeLock === null) {
+    await acquireWakeLock();
+  }
+});
+
 async function tryLockCameraForPPG(track) {
   const caps = track.getCapabilities ? track.getCapabilities() : {};
   diag("Camera capabilities: " + JSON.stringify(caps));
   let torchOn = false;
-  if (caps.torch) {
-    try {
-      await track.applyConstraints({ advanced: [{ torch: true }] });
-      torchOn = true;
-      diag("torch: true applied successfully.");
-    } catch (err) {
-      diag("torch constraint rejected: " + err.name + " " + err.message + " — turn the flashlight on manually.");
-    }
-  } else {
-    diag("torch not in this browser's camera capabilities — turn the flashlight on manually.");
+  // Some browsers (seen on Android/Brave) don't list `torch` in
+  // getCapabilities() even though applyConstraints({torch:true}) still
+  // works — the capability report is unreliable, not the hardware. Always
+  // attempt it regardless of what caps.torch says, and only fall back to
+  // "turn it on manually" if the constraint itself throws.
+  if (!caps.torch) diag("torch not reported in this browser's camera capabilities — attempting it anyway.");
+  try {
+    await track.applyConstraints({ advanced: [{ torch: true }] });
+    torchOn = true;
+    diag("torch: true applied successfully.");
+  } catch (err) {
+    diag("torch constraint rejected: " + err.name + " " + err.message + " — turn the flashlight on manually.");
   }
   const advanced = [];
   if (caps.exposureMode && caps.exposureMode.includes && caps.exposureMode.includes("manual")) advanced.push({ exposureMode: "manual" });
@@ -4652,6 +4735,7 @@ function startCapture() {
   $("s_abortCapBtn").disabled = false;
   $("s_segStrip").innerHTML = "";
   diag("Capture started. durationMs=" + captureDurationMs + " segMs=" + SEG_MS + " hopMs=" + HOP_MS);
+  acquireWakeLock();
   sampleLoop();
   liveSegTimer = setInterval(updateLiveSegStrip, 800);
 }
@@ -4716,6 +4800,7 @@ function resetCapture() {
   $("s_abortCapBtn").disabled = true;
   $("s_bigTimer").textContent = "0 s / " + (parseFloat($("s_duration").value) || 25) + " s";
   diag("Capture reset/aborted. samples collected=" + samples.length);
+  releaseWakeLock();
 }
 
 function finishCapture() {
@@ -4724,6 +4809,7 @@ function finishCapture() {
   $("s_startCapBtn").disabled = false;
   $("s_abortCapBtn").disabled = true;
   diag("Capture finished. total samples=" + samples.length);
+  releaseWakeLock();
 
   const result = analyzeSqiFft(samples, { segMs: SEG_MS, hopMs: HOP_MS });
   renderSegStrip(result.segments, result.totalSegments);
