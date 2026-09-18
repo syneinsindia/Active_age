@@ -2549,18 +2549,56 @@ const waveCtx = waveCanvas.getContext("2d");
 // Bump this on every meaningful change so a returning diagnostics/CSV export
 // can be tied to the exact code that produced it — see rom-web-spike-howto.md
 // for the shared versioning convention across all three spike tools.
-const APP_VERSION = "1.7.1"; // 1.7.1: always attempt torch on the back camera regardless of
+const APP_VERSION = "1.7.3"; // 1.7.1: always attempt torch on the back camera regardless of
 // getCapabilities() reporting (Android/Brave under-reports it), and hold a
 // Screen Wake Lock during capture so the display doesn't dim/lock mid-trial.
+// 1.7.2: log/export the actual browser (Safari/Chrome/Brave/...), not just
+// OS platform — needed to tell a real browser-choice effect apart from a
+// platform effect in the accuracy data.
+// 1.7.3: analyzePulse's peak-detection threshold now uses a 10th-90th
+// percentile spread instead of raw min/max, so one motion/settling spike
+// mid-capture can't silently poison detection for the whole rest of an
+// otherwise-clean capture (root cause of a real iOS round where all 7
+// trials failed despite good live signal quality throughout).
 function detectPlatform(ua) {
   if (/iPad|iPhone|iPod/.test(ua)) return "iOS";
   if (/Android/.test(ua)) return "Android";
   return "Other";
 }
 const PLATFORM = detectPlatform(navigator.userAgent);
-{
+
+// ---- Browser detection ----
+// UA string alone only gets you so far here: Brave deliberately reports
+// itself as Chrome in its UA (part of its anti-fingerprinting design, the
+// same feature suspected of perturbing this tool's canvas-based PPG signal
+// on Android) — it can only be told apart from real Chrome via the async
+// navigator.brave.isBrave() API. The sync guess below is corrected (and
+// re-logged) once that resolves, so a real Brave session doesn't get
+// mislabeled "Chrome" in the exported diagnostics/CSV.
+function detectBrowserSync(ua) {
+  if (/EdgiOS|Edg\//.test(ua)) return "Edge";
+  if (/OPR\/|OPiOS/.test(ua)) return "Opera";
+  if (/SamsungBrowser/.test(ua)) return "Samsung Internet";
+  if (/FxiOS|Firefox\//.test(ua)) return "Firefox";
+  if (/CriOS/.test(ua)) return "Chrome (iOS)";
+  if (/Chrome\//.test(ua)) return "Chrome";
+  if (/Version\/.*Safari\//.test(ua)) return "Safari";
+  return "Unknown";
+}
+let BROWSER = detectBrowserSync(navigator.userAgent);
+function updateVersionBadge() {
   const el = document.getElementById("h_versionBadge");
-  if (el) el.textContent = "v" + APP_VERSION + " · " + PLATFORM;
+  if (el) el.textContent = "v" + APP_VERSION + " · " + PLATFORM + " · " + BROWSER;
+}
+updateVersionBadge();
+if (navigator.brave && typeof navigator.brave.isBrave === "function") {
+  navigator.brave.isBrave().then(isBrave => {
+    if (isBrave) {
+      BROWSER = "Brave";
+      diag("Browser re-identified as Brave via navigator.brave API (UA reports as Chrome to resist fingerprinting).");
+      updateVersionBadge();
+    }
+  }).catch(() => {});
 }
 
 let stream = null;
@@ -2599,7 +2637,7 @@ window.addEventListener("error", (e) => {
 window.addEventListener("unhandledrejection", (e) => {
   diag("UNHANDLED PROMISE REJECTION: " + (e.reason && e.reason.message ? e.reason.message : e.reason));
 });
-diag("App version: " + APP_VERSION + " | Platform: " + PLATFORM);
+diag("App version: " + APP_VERSION + " | Platform: " + PLATFORM + " | Browser: " + BROWSER);
 diag("Page loaded. UA: " + navigator.userAgent);
 diag("isSecureContext: " + window.isSecureContext);
 
@@ -2607,7 +2645,7 @@ $("h_exportDiagBtn").addEventListener("click", () => {
   const blob = new Blob([diagLines.join("\n")], { type: "text/plain" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
-  a.href = url; a.download = `heart-breath-diagnostics-v${APP_VERSION}-${PLATFORM}-${Date.now()}.txt`;
+  a.href = url; a.download = `heart-breath-diagnostics-v${APP_VERSION}-${PLATFORM}-${BROWSER.replace(/\s+/g, "")}-${Date.now()}.txt`;
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 5000);
 });
@@ -3079,6 +3117,11 @@ function median(arr) {
   const mid = Math.floor(s.length / 2);
   return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
 }
+function percentile(arr, p) {
+  const s = [...arr].sort((a, b) => a - b);
+  const idx = Math.min(s.length - 1, Math.max(0, Math.round((p / 100) * (s.length - 1))));
+  return s[idx];
+}
 // Returns { hr, hrv, peakCount, quality: 'good'|'noisy'|'no_signal', reason }.
 // hr/hrv are only ever populated when quality is 'good' — a noisy or absent
 // signal returns null numbers with a reason, instead of a wrong-looking bpm.
@@ -3092,7 +3135,15 @@ function analyzePulse(arr) {
   // that bump into the main peak without merging two different heartbeats.
   const acPaired = arr.map((s, i) => ({ t: s.t, v: ac[i] }));
   const acSmooth = movingAverage(acPaired, 120);
-  const spread = Math.max(...acSmooth) - Math.min(...acSmooth);
+  // Percentile spread (10th-90th), not raw min/max: a single outlier moment —
+  // a motion/coverage-loss spike mid-capture, or a brief finger-settling
+  // wobble in the first second or two — sits in the extreme tail and would
+  // otherwise set minAmp (below) for the ENTIRE capture, silently wiping out
+  // real, smaller heartbeat peaks everywhere else in an otherwise clean
+  // signal. Confirmed against a real iOS capture that logged an explicit
+  // "MOTION/NOISE amp=31" spike (vs. a typical 2-9 range) and then found
+  // almost no peaks for the rest of an otherwise "good"-amplitude capture.
+  const spread = percentile(acSmooth, 90) - percentile(acSmooth, 10);
   // Jitter: typical sample-to-sample wiggle, a rough proxy for camera/sensor noise.
   // A real pulse wave should stand well above this; if it doesn't, peaks are noise.
   let jitterSum = 0;
@@ -3223,20 +3274,20 @@ function renderLog() {
 }
 
 $("h_exportBtn").addEventListener("click", () => {
-  const header = "trial,duration_s,hr_bpm,hrv_rmssd_ms,resp_rate_bpm,reference_hr_bpm,hr_vs_reference_pct,notes,app_version,platform\n";
+  const header = "trial,duration_s,hr_bpm,hrv_rmssd_ms,resp_rate_bpm,reference_hr_bpm,hr_vs_reference_pct,notes,app_version,platform,browser\n";
   const rows = trials.map((t, i) => {
     const pct = (t.hr != null && t.referenceHr) ? (((t.hr - t.referenceHr) / t.referenceHr) * 100).toFixed(1) : "";
     return [i + 1, t.duration, t.hr != null ? t.hr.toFixed(1) : "", t.hrv != null ? t.hrv.toFixed(1) : "",
-      t.respRate != null ? t.respRate.toFixed(1) : "", t.referenceHr ?? "", pct, (t.notes || "").replace(/,/g, ";"), APP_VERSION, PLATFORM].join(",");
+      t.respRate != null ? t.respRate.toFixed(1) : "", t.referenceHr ?? "", pct, (t.notes || "").replace(/,/g, ";"), APP_VERSION, PLATFORM, BROWSER].join(",");
   });
   const csv = header + rows.join("\n");
   const blob = new Blob([csv], { type: "text/csv" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
-  a.href = url; a.download = `heart-breath-web-spike-results-v${APP_VERSION}-${PLATFORM}-${Date.now()}.csv`;
+  a.href = url; a.download = `heart-breath-web-spike-results-v${APP_VERSION}-${PLATFORM}-${BROWSER.replace(/\s+/g, "")}-${Date.now()}.csv`;
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 5000);
-  diag("CSV exported. trials=" + trials.length + " version=" + APP_VERSION + " platform=" + PLATFORM);
+  diag("CSV exported. trials=" + trials.length + " version=" + APP_VERSION + " platform=" + PLATFORM + " browser=" + BROWSER);
 });
 
 </script>
@@ -4483,18 +4534,51 @@ const waveCtx = waveCanvas.getContext("2d");
 // Independent versioning track from the original heart-breath-signal tool —
 // this is a separate experimental pipeline being A/B tested against it, not a
 // successor. See rom-web-spike-howto.md for the shared versioning convention.
-const APP_VERSION = "1.2.1"; // 1.2.1: always attempt torch regardless of getCapabilities()
+const APP_VERSION = "1.2.2"; // 1.2.1: always attempt torch regardless of getCapabilities()
 // reporting (Android/Brave under-reports it), and hold a Screen Wake Lock
 // during capture so the display doesn't dim/lock mid-trial.
+// 1.2.2: log/export the actual browser (Safari/Chrome/Brave/...), not just
+// OS platform — needed to tell a real browser-choice effect apart from a
+// platform effect in the accuracy data.
 function detectPlatform(ua) {
   if (/iPad|iPhone|iPod/.test(ua)) return "iOS";
   if (/Android/.test(ua)) return "Android";
   return "Other";
 }
 const PLATFORM = detectPlatform(navigator.userAgent);
-{
+
+// ---- Browser detection ----
+// UA string alone only gets you so far here: Brave deliberately reports
+// itself as Chrome in its UA (part of its anti-fingerprinting design, the
+// same feature suspected of perturbing this tool's canvas-based PPG signal
+// on Android) — it can only be told apart from real Chrome via the async
+// navigator.brave.isBrave() API. The sync guess below is corrected (and
+// re-logged) once that resolves, so a real Brave session doesn't get
+// mislabeled "Chrome" in the exported diagnostics/CSV.
+function detectBrowserSync(ua) {
+  if (/EdgiOS|Edg\//.test(ua)) return "Edge";
+  if (/OPR\/|OPiOS/.test(ua)) return "Opera";
+  if (/SamsungBrowser/.test(ua)) return "Samsung Internet";
+  if (/FxiOS|Firefox\//.test(ua)) return "Firefox";
+  if (/CriOS/.test(ua)) return "Chrome (iOS)";
+  if (/Chrome\//.test(ua)) return "Chrome";
+  if (/Version\/.*Safari\//.test(ua)) return "Safari";
+  return "Unknown";
+}
+let BROWSER = detectBrowserSync(navigator.userAgent);
+function updateVersionBadge() {
   const el = document.getElementById("s_versionBadge");
-  if (el) el.textContent = "v" + APP_VERSION + " · " + PLATFORM;
+  if (el) el.textContent = "v" + APP_VERSION + " · " + PLATFORM + " · " + BROWSER;
+}
+updateVersionBadge();
+if (navigator.brave && typeof navigator.brave.isBrave === "function") {
+  navigator.brave.isBrave().then(isBrave => {
+    if (isBrave) {
+      BROWSER = "Brave";
+      diag("Browser re-identified as Brave via navigator.brave API (UA reports as Chrome to resist fingerprinting).");
+      updateVersionBadge();
+    }
+  }).catch(() => {});
 }
 
 let stream = null;
@@ -4527,7 +4611,7 @@ window.addEventListener("error", (e) => {
 window.addEventListener("unhandledrejection", (e) => {
   diag("UNHANDLED PROMISE REJECTION: " + (e.reason && e.reason.message ? e.reason.message : e.reason));
 });
-diag("App version: " + APP_VERSION + " | Platform: " + PLATFORM);
+diag("App version: " + APP_VERSION + " | Platform: " + PLATFORM + " | Browser: " + BROWSER);
 diag("Page loaded. UA: " + navigator.userAgent);
 diag("isSecureContext: " + window.isSecureContext);
 
@@ -4535,7 +4619,7 @@ $("s_exportDiagBtn").addEventListener("click", () => {
   const blob = new Blob([diagLines.join("\n")], { type: "text/plain" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
-  a.href = url; a.download = `heart-sqi-fft-diagnostics-v${APP_VERSION}-${PLATFORM}-${Date.now()}.txt`;
+  a.href = url; a.download = `heart-sqi-fft-diagnostics-v${APP_VERSION}-${PLATFORM}-${BROWSER.replace(/\s+/g, "")}-${Date.now()}.txt`;
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 5000);
 });
@@ -5154,20 +5238,20 @@ function renderLog() {
 }
 
 $("s_exportBtn").addEventListener("click", () => {
-  const header = "trial,duration_s,hr_bpm,segs_used,segs_total,resp_rate_bpm,reference_hr_bpm,hr_vs_reference_pct,notes,app_version,platform\n";
+  const header = "trial,duration_s,hr_bpm,segs_used,segs_total,resp_rate_bpm,reference_hr_bpm,hr_vs_reference_pct,notes,app_version,platform,browser\n";
   const rows = trials.map((t, i) => {
     const pct = (t.hr != null && t.referenceHr) ? (((t.hr - t.referenceHr) / t.referenceHr) * 100).toFixed(1) : "";
     return [i + 1, t.duration, t.hr != null ? t.hr.toFixed(1) : "", t.segsUsed, t.segsTotal,
-      t.respRate != null ? t.respRate.toFixed(1) : "", t.referenceHr ?? "", pct, (t.notes || "").replace(/,/g, ";"), APP_VERSION, PLATFORM].join(",");
+      t.respRate != null ? t.respRate.toFixed(1) : "", t.referenceHr ?? "", pct, (t.notes || "").replace(/,/g, ";"), APP_VERSION, PLATFORM, BROWSER].join(",");
   });
   const csv = header + rows.join("\n");
   const blob = new Blob([csv], { type: "text/csv" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
-  a.href = url; a.download = `heart-sqi-fft-web-spike-results-v${APP_VERSION}-${PLATFORM}-${Date.now()}.csv`;
+  a.href = url; a.download = `heart-sqi-fft-web-spike-results-v${APP_VERSION}-${PLATFORM}-${BROWSER.replace(/\s+/g, "")}-${Date.now()}.csv`;
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 5000);
-  diag("CSV exported. trials=" + trials.length + " version=" + APP_VERSION + " platform=" + PLATFORM);
+  diag("CSV exported. trials=" + trials.length + " version=" + APP_VERSION + " platform=" + PLATFORM + " browser=" + BROWSER);
 });
 
 </script>
