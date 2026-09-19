@@ -747,6 +747,16 @@ body.lightpanel { background: #ffffff; }
 .panel-balance .pill.wait { background: #eee; color: var(--muted); }
 .panel-balance .big-timer { font-family: var(--mono); font-size: 2.6rem; text-align: center; margin: 6px 0; font-weight: 700; color: var(--accent); }
 .panel-balance .hint { font-size: 0.78rem; color: var(--muted); line-height: 1.5; margin: 6px 0 0; }
+.panel-balance .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.panel-balance .row > button { width: auto; flex: 1; margin-bottom: 8px; }
+.panel-balance .video-wrap { position: relative; width: 100%; background: #000; border-radius: 12px; overflow: hidden; aspect-ratio: 3 / 4; margin-bottom: 10px; }
+.panel-balance .video-wrap video, .panel-balance .video-wrap canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }
+.panel-balance .channel-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+.panel-balance .channel-card { background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 8px; text-align: center; }
+.panel-balance .channel-card .lbl { font-size: 0.68rem; text-transform: uppercase; letter-spacing: .03em; color: var(--muted); }
+.panel-balance .channel-card .state { font-weight: 700; font-size: 0.85rem; margin-top: 2px; color: #2f6f4f; }
+.panel-balance .channel-card.triggered { background: #f7e3da; border-color: var(--warn); }
+.panel-balance .channel-card.triggered .state { color: var(--warn); }
 .panel-balance .result-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
 .panel-balance .result-card { background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 10px 6px; text-align: center; }
 .panel-balance .result-card .lbl { color: var(--muted); font-size: 0.68rem; text-transform: uppercase; letter-spacing: .03em; }
@@ -770,11 +780,17 @@ body.lightpanel { background: #ffffff; }
 .panel-sts .btn-secondary { background: #eee; color: var(--ink); }
 .panel-sts .btn-warn { background: var(--warn); color: #fff; }
 .panel-sts .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 0.72rem; font-weight: 600; }
+.panel-sts .pill.ok { background: #e2f0e6; color: #2f6f4f; }
+.panel-sts .pill.bad { background: #f7e3da; color: var(--warn); }
 .panel-sts .pill.wait { background: #eee; color: var(--muted); }
 .panel-sts .big-timer { font-family: var(--mono); font-size: 2.6rem; text-align: center; margin: 6px 0; font-weight: 700; color: var(--accent); }
 .panel-sts .step-count { font-family: var(--mono); font-size: 2rem; text-align: center; margin: 2px 0; font-weight: 700; color: var(--accent); }
 .panel-sts .step-count .unit { font-size: 0.9rem; font-weight: 400; color: var(--muted); }
 .panel-sts .hint { font-size: 0.78rem; color: var(--muted); line-height: 1.5; margin: 6px 0 0; }
+.panel-sts .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.panel-sts .row > button { width: auto; flex: 1; margin-bottom: 8px; }
+.panel-sts .video-wrap { position: relative; width: 100%; background: #000; border-radius: 12px; overflow: hidden; aspect-ratio: 3 / 4; margin-bottom: 10px; }
+.panel-sts .video-wrap video, .panel-sts .video-wrap canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }
 .panel-sts .result-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 8px; }
 .panel-sts .result-card { background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 10px 6px; text-align: center; }
 .panel-sts .result-card .lbl { color: var(--muted); font-size: 0.68rem; text-transform: uppercase; letter-spacing: .03em; }
@@ -973,16 +989,16 @@ body.lightpanel { background: #ffffff; }
 </a>
 
 <a class="card" style="--card-accent: #a8842f;" href="#balance">
-  <div class="card-top"><h2>Single-Leg Balance</h2><span class="ver" id="navVerBalance">v1.0.0</span></div>
-  <p>Stand on one leg, eyes open then eyes closed &mdash; 6 alternating timed trials, 45-second cap each, self-timed with a Start/Stop button. Part of the ratified V1 movement battery; not yet built until now.</p>
-  <div class="status-row"><span class="status">not yet tested</span><span class="status">new</span></div>
+  <div class="card-top"><h2>Single-Leg Balance</h2><span class="ver" id="navVerBalance">v2.0.0</span></div>
+  <p>Stand on one leg, eyes open then eyes closed &mdash; 6 alternating trials, camera-tracked against all four end conditions (arms, raised foot, stance foot, eyes), with a manual "I lost balance" backup. Part of the ratified V1 movement battery.</p>
+  <div class="status-row"><span class="status">not yet tested</span><span class="status">experimental</span></div>
   <div class="open">Open test</div>
 </a>
 
 <a class="card" style="--card-accent: #6f4f6b;" href="#sts">
-  <div class="card-top"><h2>Sit-to-Stand Performance</h2><span class="ver" id="navVerSts">v1.0.0</span></div>
-  <p>Stand up and sit down as many times as you safely can in 30 seconds &mdash; the standard chair-stand test (McKay 2017 / Lein 2022 protocol). Part of the ratified V1 movement battery; not yet built until now.</p>
-  <div class="status-row"><span class="status">not yet tested</span><span class="status">new</span></div>
+  <div class="card-top"><h2>Sit-to-Stand Performance</h2><span class="ver" id="navVerSts">v2.0.0</span></div>
+  <p>Stand up and sit down as many times as you safely can in 30 seconds &mdash; the standard chair-stand test (McKay 2017 / Lein 2022 protocol), now with camera-based automatic rep counting and a manual +/&minus; correction backup. Part of the ratified V1 movement battery.</p>
+  <div class="status-row"><span class="status">not yet tested</span><span class="status">experimental</span></div>
   <div class="open">Open test</div>
 </a>
 
@@ -1003,7 +1019,7 @@ body.lightpanel { background: #ffffff; }
 <footer class="home-footer">
   Every export from every test above is tagged with that test's version number and the detected platform (iOS/Android), both in the file name and as columns inside the CSV &mdash; so files can be told apart even if renamed. Diagnostics files carry the same tags on their first line. If you're re-testing after an update, check the version badge next to the test's title matches what was just sent, in case the browser served a cached copy &mdash; a hard refresh (pull down to refresh, or close and reopen the tab) fixes that.
   <br><br>
-  This is now a single file &mdash; all thirteen tests and this home page live in one HTML document, navigated with in-page links (no separate files to keep track of). See <code>rom-web-spike-howto.md</code> for the versioning convention. "Heart Rate &mdash; SQI+FFT" is an alternative analysis pipeline being A/B tested against "Heart &amp; Breath Signal", not a replacement for it &mdash; both stay in the app until one wins out. "Heart Recovery Speed", "Cardio Response Test", "Chest Breathing Scan", and "Walking Endurance" are new, first-pass spikes built from a feasibility study of what else a phone's camera/mic/accelerometer could measure &mdash; see <code>new-tests-engineering-spike-log.md</code> for what each one does and why (including why the first two are separate tools rather than one combined check; those internal build names were "Heart &amp; Breath Recovery Check" and "Guided Submaximal Fitness Test," respectively), and none of the four has real-device data behind its thresholds yet (each says so on its own page). "Single-Leg Balance" and "Sit-to-Stand Performance" close a gap flagged in the Body Check engagement plan: both are part of the already-ratified V1 movement battery and already appear in the published Body Check home-screen mockup, but neither had a working capture tool until now. Both are self-timed/self-counted (Start/Stop and tap-to-count buttons) rather than camera-tracked, deliberately kept simple and reliable for a first pass; no graded scoring is shown here, only the raw captured numbers, consistent with every other tool on this page &mdash; Sit-to-Stand's norms (McKay 2017) are confirmed and ready for the scoring engine, while Single-Leg Balance's norms (Springer 2007) still have an open age-band/SD question logged in <code>single-leg-balance-springer-2007.md</code>. "Finger Tapping" and "Blink-Rate Check" are candidate tests for the free daily-engagement rotation, not part of the clinical battery &mdash; see <code>body-check-engagement-execution-plan.md</code> §1. Finger Tapping is a plain on-screen tap counter, no camera. Blink-Rate Check is the one genuinely new capture mode in this pair: on-device face tracking (MediaPipe Face Landmarker, same family of model as Gait Speed and Range of Motion's pose tracking, nothing sent off the phone) reading blink-related blendshape scores to count blinks over a short window &mdash; explicitly uncalibrated (fixed open/close thresholds, not yet checked against a human-reviewed video count) and, like every camera-based tool on this page, not yet run on a real device.
+  This is now a single file &mdash; all thirteen tests and this home page live in one HTML document, navigated with in-page links (no separate files to keep track of). See <code>rom-web-spike-howto.md</code> for the versioning convention. "Heart Rate &mdash; SQI+FFT" is an alternative analysis pipeline being A/B tested against "Heart &amp; Breath Signal", not a replacement for it &mdash; both stay in the app until one wins out. "Heart Recovery Speed", "Cardio Response Test", "Chest Breathing Scan", and "Walking Endurance" are new, first-pass spikes built from a feasibility study of what else a phone's camera/mic/accelerometer could measure &mdash; see <code>new-tests-engineering-spike-log.md</code> for what each one does and why (including why the first two are separate tools rather than one combined check; those internal build names were "Heart &amp; Breath Recovery Check" and "Guided Submaximal Fitness Test," respectively), and none of the four has real-device data behind its thresholds yet (each says so on its own page). "Single-Leg Balance" and "Sit-to-Stand Performance" close a gap flagged in the Body Check engagement plan: both are part of the already-ratified V1 movement battery and already appear in the published Body Check home-screen mockup, but neither had a working capture tool until now. Both started as self-timed/self-counted (Start/Stop and tap-to-count buttons) and were then upgraded to camera-based automatic detection (v2.0.0) &mdash; Sit-to-Stand counts reps by tracking hip height through each stand/sit cycle (pose landmarks, same model family as Gait Speed/ROM), Single-Leg Balance watches all four things that end a trial per the Springer protocol (arms uncrossing, raised foot moving, stance foot pivoting, and on eyes-closed trials, eyes opening via face tracking). Both keep a manual backup (a "correct the count" stepper for Sit-to-Stand, an "I lost balance" tap for Balance) since neither auto-detector has been checked against real trials yet. No graded scoring is shown on either page, only the raw captured numbers, consistent with every other tool here &mdash; Sit-to-Stand's norms (McKay 2017) are confirmed and ready for the scoring engine, while Single-Leg Balance's norms (Springer 2007) still have an open age-band/SD question logged in <code>single-leg-balance-springer-2007.md</code>. "Finger Tapping" and "Blink-Rate Check" are candidate tests for the free daily-engagement rotation, not part of the clinical battery &mdash; see <code>body-check-engagement-execution-plan.md</code> §1. Finger Tapping is a plain on-screen tap counter, no camera. Blink-Rate Check uses the same on-device face tracking now shared with Single-Leg Balance's eyes channel &mdash; explicitly uncalibrated (fixed open/close thresholds, not yet checked against a human-reviewed video count) and, like every camera-based tool on this page, not yet run on a real device.
 </footer>
 
 </div>
@@ -1911,10 +1927,10 @@ body.lightpanel { background: #ffffff; }
 
 
 <h1>Single-Leg Balance</h1>
-<p class="sub">How long you can hold your balance standing on one leg — eyes open, then eyes closed. Alternates six short trials: three with eyes open, three with eyes closed.</p>
+<p class="sub">How long you can hold your balance standing on one leg — eyes open, then eyes closed. Camera-tracked: watches your arms, raised foot, stance foot, and (on eyes-closed trials) your eyes, and stops the timer automatically when any of them breaks position.</p>
 
 <div class="caveat">
-  <b>Stand near a wall or sturdy surface, not holding it.</b> Only step in to steady yourself if you feel you're about to fall — that's exactly what "lost balance" means for this test. Bare feet, hands on hips or arms crossed over your chest, and lift the non-stance foot just off the floor near your ankle (not high, not touching the stance leg). Each trial ends automatically at 45 seconds if you're still holding.
+  <b>Prop your phone against something stable, facing you, far enough back to see your whole body — head to feet.</b> Bare feet, hands on hips or arms crossed over your chest, raised foot held near (not touching) your stance-leg ankle. This is a first-pass automatic build — if the camera doesn't catch it, tap "I lost balance" yourself; that always works as a backup, and every trial records which of the two ended it.
 </div>
 
 <section>
@@ -1924,19 +1940,42 @@ body.lightpanel { background: #ffffff; }
     <option value="right" selected>Right leg</option>
     <option value="left">Left leg</option>
   </select>
-  <p class="hint">The protocol alternates trials automatically: eyes open, eyes closed, eyes open, eyes closed, eyes open, eyes closed — 6 trials total, same stance leg throughout. Tap "Lost balance / Stop" the moment your arms uncross, your raised foot touches down or drifts away, your stance foot pivots or steps, or (on an eyes-closed trial) your eyes open.</p>
+  <div class="row">
+    <button id="bal_startCamBtn" class="btn-secondary">Start Camera</button>
+    <button id="bal_switchCamBtn" class="btn-secondary">Switch Camera</button>
+  </div>
+  <div class="row">
+    <span id="bal_camPill" class="pill wait">not started</span>
+    <span id="bal_poseModelPill" class="pill wait"></span>
+    <span id="bal_faceModelPill" class="pill wait"></span>
+  </div>
+  <p class="hint">The protocol alternates trials automatically: eyes open, eyes closed, eyes open, eyes closed, eyes open, eyes closed — 6 trials total, same stance leg throughout.</p>
 </section>
 
-<section>
-  <h2>2 · Trial <span id="bal_trialNum">1</span> of 6 — <span id="bal_condLabel">Eyes Open</span></h2>
-  <button id="bal_startBtn" class="btn-primary">Start Trial</button>
-  <button id="bal_stopBtn" class="btn-warn" style="display:none;">Lost balance / Stop</button>
+<section id="bal_camSection" style="display:none;">
+  <h2>2 · Camera</h2>
+  <div class="video-wrap">
+    <video id="bal_video" playsinline muted autoplay></video>
+    <canvas id="bal_overlay"></canvas>
+  </div>
+</section>
+
+<section id="bal_trialSection" style="display:none;">
+  <h2>3 · Trial <span id="bal_trialNum">1</span> of 6 — <span id="bal_condLabel">Eyes Open</span></h2>
+  <button id="bal_startBtn" class="btn-primary" disabled>Start Trial</button>
+  <button id="bal_stopBtn" class="btn-warn" style="display:none;">I lost balance / Stop</button>
   <div class="big-timer" id="bal_timer">—</div>
   <p class="hint" id="bal_liveHint">Get into position, then tap Start the moment you lift your foot.</p>
+  <div class="channel-grid" id="bal_channelGrid" style="display:none;">
+    <div class="channel-card" id="bal_chArms"><div class="lbl">Arms</div><div class="state">holding</div></div>
+    <div class="channel-card" id="bal_chFoot"><div class="lbl">Raised foot</div><div class="state">holding</div></div>
+    <div class="channel-card" id="bal_chStance"><div class="lbl">Stance foot</div><div class="state">holding</div></div>
+    <div class="channel-card" id="bal_chEyes"><div class="lbl">Eyes</div><div class="state">—</div></div>
+  </div>
 </section>
 
 <section id="bal_resultsSec" style="display:none;">
-  <h2>3 · Result — all 6 trials</h2>
+  <h2>4 · Result — all 6 trials</h2>
   <div class="result-grid">
     <div class="result-card"><div class="lbl">Best · eyes open</div><div class="val" id="bal_resBestEO">—</div></div>
     <div class="result-card"><div class="lbl">Best · eyes closed</div><div class="val" id="bal_resBestEC">—</div></div>
@@ -1950,7 +1989,7 @@ body.lightpanel { background: #ffffff; }
   <h2>Trial log</h2>
   <div class="table-scroll">
     <table id="bal_logTable">
-      <thead><tr><th>#</th><th>Eyes</th><th>Leg</th><th>Held (s)</th><th>Full 45s</th><th>Notes</th></tr></thead>
+      <thead><tr><th>#</th><th>Eyes</th><th>Leg</th><th>Held (s)</th><th>Full 45s</th><th>Ended by</th><th>Notes</th></tr></thead>
       <tbody id="bal_logBody"></tbody>
     </table>
   </div>
@@ -1971,28 +2010,48 @@ body.lightpanel { background: #ffffff; }
 
 
 <h1>Sit-to-Stand Performance</h1>
-<p class="sub">Stand up and sit back down as many times as you safely can in 30 seconds &mdash; the standard 30-second chair-stand test (same protocol family as the CDC STEADI Chair Stand).</p>
+<p class="sub">Stand up and sit back down as many times as you safely can in 30 seconds &mdash; the standard 30-second chair-stand test (same protocol family as the CDC STEADI Chair Stand). Camera-tracked: counts each full stand-sit cycle automatically by watching your hip height.</p>
 
 <div class="caveat">
-  <b>Use a sturdy, armless chair against a wall so it can't slide.</b> Start seated, arms crossed over your chest, feet flat on the floor. Each full stand-to-sit counts as one rep. Stop immediately if you feel unsteady — an early stop is recorded, not penalized. A helper can operate the counter and watch you instead, if one's around.
+  <b>Prop your phone facing you, far enough back to see you fully stand and fully sit.</b> Use a sturdy, armless chair against a wall so it can't slide. Arms crossed over your chest, feet flat. Stop immediately if you feel unsteady. This is a first-pass automatic count — check it against the live number and use the +/&minus; buttons to correct it if the camera misses a rep or double-counts one.
 </div>
 
 <section>
-  <h2>1 · Get ready</h2>
-  <p class="hint">Sit with your back straight, feet flat, arms crossed over your chest. When you tap Start, the 30-second timer begins immediately — get into the ready position first.</p>
-  <button id="sts_startBtn" class="btn-primary">Start 30s Test</button>
+  <h2>1 · Camera</h2>
+  <div class="row">
+    <button id="sts_startCamBtn" class="btn-secondary">Start Camera</button>
+    <button id="sts_switchCamBtn" class="btn-secondary">Switch Camera</button>
+  </div>
+  <div class="row">
+    <span id="sts_camPill" class="pill wait">not started</span>
+    <span id="sts_modelPill" class="pill wait"></span>
+  </div>
+  <div class="video-wrap" id="sts_videoWrap" style="display:none;">
+    <video id="sts_video" playsinline muted autoplay></video>
+    <canvas id="sts_overlay"></canvas>
+  </div>
 </section>
 
 <section>
-  <h2>2 · Test</h2>
+  <h2>2 · Get ready</h2>
+  <p class="hint">Sit with your back straight, feet flat, arms crossed over your chest. When you tap Start, the 30-second timer begins immediately — get into the ready position first.</p>
+  <button id="sts_startBtn" class="btn-primary" disabled>Start 30s Test</button>
+</section>
+
+<section>
+  <h2>3 · Test</h2>
   <div class="big-timer" id="sts_timer">30.0s</div>
-  <button id="sts_tapBtn" class="btn-primary" disabled style="font-size:1.3rem; padding:22px 14px;">Tap once per full stand-sit</button>
   <div class="step-count" id="sts_repCount">0 <span class="unit">reps</span></div>
+  <div class="row">
+    <button id="sts_minusBtn" class="btn-secondary">&minus; correct</button>
+    <button id="sts_plusBtn" class="btn-secondary">+ correct</button>
+  </div>
   <button id="sts_stopBtn" class="btn-warn" style="display:none;">Stop Early</button>
+  <p class="hint" id="sts_trackHint"></p>
 </section>
 
 <section id="sts_resultsSec" style="display:none;">
-  <h2>3 · Result</h2>
+  <h2>4 · Result</h2>
   <div class="result-grid">
     <div class="result-card"><div class="lbl">Reps</div><div class="val" id="sts_resReps">—</div></div>
     <div class="result-card"><div class="lbl">Duration</div><div class="val" id="sts_resDur">—</div></div>
@@ -2005,7 +2064,7 @@ body.lightpanel { background: #ffffff; }
   <h2>Trial log</h2>
   <div class="table-scroll">
     <table id="sts_logTable">
-      <thead><tr><th>#</th><th>Reps</th><th>Duration (s)</th><th>Ended early</th><th>Notes</th></tr></thead>
+      <thead><tr><th>#</th><th>Reps</th><th>Duration (s)</th><th>Manually corrected</th><th>Tracking lost (s)</th><th>Ended early</th><th>Notes</th></tr></thead>
       <tbody id="sts_logBody"></tbody>
     </table>
   </div>
@@ -6882,10 +6941,20 @@ $("w_exportBtn").addEventListener("click", () => {
 
 <script type="module">
 
+import { PoseLandmarker, FaceLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
+
 const $ = (id) => document.getElementById(id);
-const APP_VERSION = "1.0.0";
-const PLATFORM = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream ? "iOS"
-  : /Android/.test(navigator.userAgent) ? "Android" : "Desktop";
+const balVideo = $("bal_video");
+const balOverlay = $("bal_overlay");
+const balCtx = balOverlay.getContext("2d");
+
+const APP_VERSION = "2.0.0";
+function balDetectPlatform(ua) {
+  if (/iPad|iPhone|iPod/.test(ua)) return "iOS";
+  if (/Android/.test(ua)) return "Android";
+  return "Other";
+}
+const PLATFORM = balDetectPlatform(navigator.userAgent);
 $("bal_verPill").textContent = "v" + APP_VERSION + " · " + PLATFORM;
 
 let balDiagLines = [];
@@ -6910,13 +6979,108 @@ $("bal_exportDiagBtn").addEventListener("click", () => {
   setTimeout(() => URL.revokeObjectURL(url), 5000);
 });
 
+// ---- Camera + models ----
+let balStream = null;
+let balFacing = "user";
+let balPoseLandmarker = null;
+let balFaceLandmarker = null;
+
+async function balOpenCamera() {
+  if (balStream) balStream.getTracks().forEach(t => t.stop());
+  balStream = await navigator.mediaDevices.getUserMedia({
+    video: { facingMode: { ideal: balFacing }, width: { ideal: 640 }, height: { ideal: 480 } },
+    audio: false
+  });
+  balVideo.srcObject = balStream;
+  await balVideo.play();
+  balResizeOverlay();
+  balDiag("Camera opened. facingMode=" + balFacing);
+}
+function balResizeOverlay() {
+  balOverlay.width = balVideo.videoWidth || balVideo.clientWidth;
+  balOverlay.height = balVideo.videoHeight || balVideo.clientHeight;
+}
+balVideo.addEventListener("loadedmetadata", balResizeOverlay);
+
+async function balInitPose() {
+  $("bal_poseModelPill").innerHTML = '<span class="pill wait">loading pose</span>';
+  const fileset = await FilesetResolver.forVisionTasks(
+    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
+  );
+  balPoseLandmarker = await PoseLandmarker.createFromOptions(fileset, {
+    baseOptions: {
+      modelAssetPath: "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
+      delegate: "GPU"
+    },
+    runningMode: "VIDEO",
+    numPoses: 1
+  });
+  $("bal_poseModelPill").innerHTML = '<span class="pill ok">pose ready</span>';
+  balDiag("PoseLandmarker model loaded.");
+}
+async function balInitFace() {
+  $("bal_faceModelPill").innerHTML = '<span class="pill wait">loading face</span>';
+  const fileset = await FilesetResolver.forVisionTasks(
+    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
+  );
+  balFaceLandmarker = await FaceLandmarker.createFromOptions(fileset, {
+    baseOptions: {
+      modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
+      delegate: "GPU"
+    },
+    runningMode: "VIDEO",
+    numFaces: 1,
+    outputFaceBlendshapes: true
+  });
+  $("bal_faceModelPill").innerHTML = '<span class="pill ok">face ready</span>';
+  balDiag("FaceLandmarker model loaded.");
+}
+
+$("bal_startCamBtn").addEventListener("click", async () => {
+  $("bal_camSection").style.display = "block";
+  $("bal_trialSection").style.display = "block";
+  try {
+    await balOpenCamera();
+    $("bal_camPill").innerHTML = '<span class="pill ok">live</span>';
+    await balInitPose();
+    await balInitFace();
+    $("bal_startBtn").disabled = false;
+    balLoop();
+  } catch (err) {
+    $("bal_camPill").innerHTML = '<span class="pill bad">denied/error</span>';
+    balDiag("CAMERA/MODEL ERROR: " + (err.name || "") + " " + (err.message || err));
+    alert("Camera or model setup failed: " + err.message);
+  }
+});
+$("bal_switchCamBtn").addEventListener("click", async () => {
+  balFacing = (balFacing === "user") ? "environment" : "user";
+  try { await balOpenCamera(); } catch (err) { alert("Could not switch camera: " + err.message); }
+});
+
+// ---- Trial protocol: calibrate a short baseline per trial (wrist distance,
+// raised-ankle position, stance-ankle position), then watch four channels —
+// arms uncrossing, raised foot moving, stance foot pivoting/stepping, and
+// (eyes-closed trials only, after a short settling grace period) eyes
+// opening via face-blendshape score. First channel to trip ends the trial;
+// "I lost balance" always works too, as a manual backup. ----
 const BAL_TRIAL_CAP_S = 45;
 const BAL_SEQUENCE = ["Eyes Open", "Eyes Closed", "Eyes Open", "Eyes Closed", "Eyes Open", "Eyes Closed"];
+const CALIB_MS = 1200;
+const EYE_GRACE_MS = 1000;
+const ARMS_UNCROSS_RATIO = 1.6;   // current wrist-distance / baseline wrist-distance
+const FOOT_MOVE_THRESH = 0.08;    // normalized coords, raised-ankle drift from baseline
+const STANCE_JUMP_THRESH = 0.05;  // normalized coords, frame-to-frame stance-ankle jump
+const STANCE_DRIFT_THRESH = 0.15; // normalized coords, cumulative stance-ankle drift from baseline
+const EYE_OPEN_TRIGGER = 0.3;     // averaged eyeBlinkLeft/Right blendshape score
+
 let balTrialIdx = 0;
-let balRunning = false;
-let balStartT = null;
-let balRaf = null;
-let balTrials = []; // { idx, eyes, leg, heldS, endedEarly, notes }
+let balPhase = "idle"; // idle | calibrating | active | done
+let balCalibStartT = null;
+let balActiveStartT = null;
+let balCalibSamples = { wristDist: [], raisedAnkle: [], stanceAnkle: [] };
+let balBaseline = { wristDist: null, raisedAnkle: null, stanceAnkle: null };
+let balPrevStanceAnkle = null;
+let balTrials = []; // { idx, eyes, leg, heldS, heldFull45, endedBy, notes }
 
 function balUpdateHeader() {
   $("bal_trialNum").textContent = balTrialIdx + 1;
@@ -6924,50 +7088,178 @@ function balUpdateHeader() {
 }
 balUpdateHeader();
 
-$("bal_startBtn").addEventListener("click", () => {
-  balRunning = true;
-  balStartT = performance.now();
-  $("bal_startBtn").style.display = "none";
-  $("bal_stopBtn").style.display = "block";
-  $("bal_liveHint").textContent = BAL_SEQUENCE[balTrialIdx] === "Eyes Closed"
-    ? "Close your eyes now. Tap Stop the instant you lose position."
-    : "Hold steady. Tap Stop the instant you lose position.";
-  balDiag("Trial " + (balTrialIdx + 1) + " (" + BAL_SEQUENCE[balTrialIdx] + ") started.");
-  balTick();
-});
-
-function balTick() {
-  if (!balRunning) return;
-  const elapsedS = (performance.now() - balStartT) / 1000;
-  const remaining = BAL_TRIAL_CAP_S - elapsedS;
-  $("bal_timer").textContent = elapsedS.toFixed(1) + "s";
-  if (remaining <= 0) { balFinishTrial(false, BAL_TRIAL_CAP_S); return; }
-  balRaf = requestAnimationFrame(balTick);
+function balSetChannel(name, state, triggered) {
+  const el = $("bal_ch" + name);
+  if (!el) return;
+  el.querySelector(".state").textContent = state;
+  el.classList.toggle("triggered", !!triggered);
+}
+function balResetChannels() {
+  balSetChannel("Arms", "holding", false);
+  balSetChannel("Foot", "holding", false);
+  balSetChannel("Stance", "holding", false);
+  balSetChannel("Eyes", "—", false);
 }
 
-$("bal_stopBtn").addEventListener("click", () => {
-  const elapsedS = (performance.now() - balStartT) / 1000;
-  balFinishTrial(true, elapsedS);
+$("bal_startBtn").addEventListener("click", () => {
+  balPhase = "calibrating";
+  balCalibStartT = performance.now();
+  balCalibSamples = { wristDist: [], raisedAnkle: [], stanceAnkle: [] };
+  balBaseline = { wristDist: null, raisedAnkle: null, stanceAnkle: null };
+  balPrevStanceAnkle = null;
+  $("bal_startBtn").style.display = "none";
+  $("bal_stopBtn").style.display = "block";
+  $("bal_channelGrid").style.display = "grid";
+  balResetChannels();
+  $("bal_timer").textContent = "0.0s";
+  $("bal_liveHint").textContent = "Hold your starting position — calibrating…";
+  balDiag("Trial " + (balTrialIdx + 1) + " (" + BAL_SEQUENCE[balTrialIdx] + ") calibration started.");
 });
 
-function balFinishTrial(endedEarly, heldS) {
-  balRunning = false;
-  if (balRaf) cancelAnimationFrame(balRaf);
+$("bal_stopBtn").addEventListener("click", () => balEndTrial("manual"));
+
+function balEndTrial(reason) {
+  if (balPhase === "idle" || balPhase === "done") return;
+  const heldS = balPhase === "active" ? (performance.now() - balActiveStartT) / 1000 : 0;
+  balPhase = "done";
   $("bal_startBtn").style.display = "block";
   $("bal_stopBtn").style.display = "none";
   $("bal_timer").textContent = heldS.toFixed(1) + "s";
+
   const leg = $("bal_leg").value;
   const eyes = BAL_SEQUENCE[balTrialIdx];
-  balTrials.push({ idx: balTrialIdx + 1, eyes, leg, heldS, endedEarly, notes: "" });
-  balDiag("Trial " + (balTrialIdx + 1) + " (" + eyes + ") finished. heldS=" + heldS.toFixed(1) + " endedEarly=" + endedEarly);
+  const heldFull45 = reason === "timeout";
+  balTrials.push({ idx: balTrialIdx + 1, eyes, leg, heldS, heldFull45, endedBy: reason, notes: "" });
+  balDiag("Trial " + (balTrialIdx + 1) + " (" + eyes + ") finished. heldS=" + heldS.toFixed(1) + " endedBy=" + reason);
   balRenderLog();
+
   balTrialIdx++;
   if (balTrialIdx >= BAL_SEQUENCE.length) {
     balShowResults();
+    balPhase = "idle";
   } else {
+    balPhase = "idle";
     balUpdateHeader();
     $("bal_liveHint").textContent = "Get into position, then tap Start the moment you lift your foot.";
+    $("bal_channelGrid").style.display = "none";
   }
+}
+
+function balDist(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
+
+function balLoop() {
+  requestAnimationFrame(balLoop);
+  if (!balPoseLandmarker || balVideo.readyState < 2) return;
+  const now = performance.now();
+
+  const poseResult = balPoseLandmarker.detectForVideo(balVideo, now);
+  balCtx.clearRect(0, 0, balOverlay.width, balOverlay.height);
+  const lm = (poseResult.landmarks && poseResult.landmarks.length > 0) ? poseResult.landmarks[0] : null;
+
+  let faceScore = null;
+  const wantFace = balPhase === "calibrating" || (balPhase === "active" && BAL_SEQUENCE[balTrialIdx] === "Eyes Closed");
+  if (balFaceLandmarker && wantFace) {
+    const faceResult = balFaceLandmarker.detectForVideo(balVideo, now);
+    if (faceResult.faceBlendshapes && faceResult.faceBlendshapes.length > 0) {
+      const cats = faceResult.faceBlendshapes[0].categories;
+      const l = cats.find(c => c.categoryName === "eyeBlinkLeft");
+      const r = cats.find(c => c.categoryName === "eyeBlinkRight");
+      faceScore = ((l ? l.score : 0) + (r ? r.score : 0)) / 2;
+    }
+  }
+
+  if (!lm) return;
+
+  const leg = $("bal_leg") ? $("bal_leg").value : "right";
+  const stanceIdx = leg === "right" ? 28 : 27;
+  const raisedIdx = leg === "right" ? 27 : 28;
+  const lw = lm[15], rw = lm[16];
+  const stanceAnkle = lm[stanceIdx], raisedAnkle = lm[raisedIdx];
+  const visOk = (lw.visibility ?? 1) > 0.4 && (rw.visibility ?? 1) > 0.4 &&
+                (stanceAnkle.visibility ?? 1) > 0.4 && (raisedAnkle.visibility ?? 1) > 0.4;
+
+  [lw, rw, stanceAnkle, raisedAnkle].forEach(p => {
+    balCtx.fillStyle = "rgba(168,132,47,0.9)";
+    balCtx.beginPath();
+    balCtx.arc(p.x * balOverlay.width, p.y * balOverlay.height, 6, 0, 2 * Math.PI);
+    balCtx.fill();
+  });
+
+  if (!visOk) {
+    if (balPhase === "active" || balPhase === "calibrating") balDiag("Tracking lost (low landmark visibility) during " + balPhase + ".");
+    return;
+  }
+
+  const wristDist = balDist(lw, rw);
+
+  if (balPhase === "calibrating") {
+    balCalibSamples.wristDist.push(wristDist);
+    balCalibSamples.raisedAnkle.push({ x: raisedAnkle.x, y: raisedAnkle.y });
+    balCalibSamples.stanceAnkle.push({ x: stanceAnkle.x, y: stanceAnkle.y });
+    const elapsed = now - balCalibStartT;
+    if (elapsed >= CALIB_MS) {
+      const n = balCalibSamples.wristDist.length;
+      if (n >= 3) {
+        balBaseline.wristDist = balCalibSamples.wristDist.reduce((a, b) => a + b, 0) / n;
+        balBaseline.raisedAnkle = {
+          x: balCalibSamples.raisedAnkle.reduce((a, p) => a + p.x, 0) / n,
+          y: balCalibSamples.raisedAnkle.reduce((a, p) => a + p.y, 0) / n
+        };
+        balBaseline.stanceAnkle = {
+          x: balCalibSamples.stanceAnkle.reduce((a, p) => a + p.x, 0) / n,
+          y: balCalibSamples.stanceAnkle.reduce((a, p) => a + p.y, 0) / n
+        };
+        balPrevStanceAnkle = balBaseline.stanceAnkle;
+        balPhase = "active";
+        balActiveStartT = now;
+        $("bal_liveHint").textContent = BAL_SEQUENCE[balTrialIdx] === "Eyes Closed" ? "Close your eyes now — hold." : "Hold steady.";
+        balDiag("Trial " + (balTrialIdx + 1) + " calibrated. wristDist0=" + balBaseline.wristDist.toFixed(3) + " n=" + n);
+      } else {
+        balDiag("Calibration extended — not enough tracked frames (n=" + n + ").");
+        balCalibStartT = now;
+      }
+    }
+    return;
+  }
+
+  if (balPhase !== "active") return;
+
+  const elapsedS = (now - balActiveStartT) / 1000;
+  $("bal_timer").textContent = elapsedS.toFixed(1) + "s";
+
+  const armsRatio = balBaseline.wristDist ? (wristDist / balBaseline.wristDist) : 1;
+  const armsTriggered = armsRatio > ARMS_UNCROSS_RATIO;
+  balSetChannel("Arms", armsTriggered ? "uncrossed" : "holding", armsTriggered);
+
+  const footDrift = balBaseline.raisedAnkle ? balDist(raisedAnkle, balBaseline.raisedAnkle) : 0;
+  const footTriggered = footDrift > FOOT_MOVE_THRESH;
+  balSetChannel("Foot", footTriggered ? "moved" : "holding", footTriggered);
+
+  const stanceJump = balPrevStanceAnkle ? balDist(stanceAnkle, balPrevStanceAnkle) : 0;
+  const stanceDrift = balBaseline.stanceAnkle ? balDist(stanceAnkle, balBaseline.stanceAnkle) : 0;
+  const stanceTriggered = stanceJump > STANCE_JUMP_THRESH || stanceDrift > STANCE_DRIFT_THRESH;
+  balSetChannel("Stance", stanceTriggered ? "pivoted/stepped" : "holding", stanceTriggered);
+  balPrevStanceAnkle = stanceAnkle;
+
+  let eyesTriggered = false;
+  if (BAL_SEQUENCE[balTrialIdx] === "Eyes Closed") {
+    if ((now - balActiveStartT) < EYE_GRACE_MS) {
+      balSetChannel("Eyes", "settling…", false);
+    } else if (faceScore != null) {
+      eyesTriggered = faceScore < EYE_OPEN_TRIGGER;
+      balSetChannel("Eyes", eyesTriggered ? "opened" : "closed", eyesTriggered);
+    } else {
+      balSetChannel("Eyes", "no face", false);
+    }
+  } else {
+    balSetChannel("Eyes", "n/a", false);
+  }
+
+  if (elapsedS >= BAL_TRIAL_CAP_S) balEndTrial("timeout");
+  else if (armsTriggered) balEndTrial("arms");
+  else if (footTriggered) balEndTrial("foot");
+  else if (stanceTriggered) balEndTrial("stance");
+  else if (eyesTriggered) balEndTrial("eyes");
 }
 
 function balFmt(v, d = 1) { return v == null ? "—" : v.toFixed(d) + "s"; }
@@ -6985,9 +7277,10 @@ function balShowResults() {
 }
 
 $("bal_resetBtn").addEventListener("click", () => {
-  balTrialIdx = 0; balTrials = [];
+  balTrialIdx = 0; balTrials = []; balPhase = "idle";
   $("bal_resultsSec").style.display = "none";
   $("bal_timer").textContent = "—";
+  $("bal_channelGrid").style.display = "none";
   balUpdateHeader();
   $("bal_liveHint").textContent = "Get into position, then tap Start the moment you lift your foot.";
   balRenderLog();
@@ -7001,7 +7294,7 @@ function balRenderLog() {
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td>${t.idx}</td><td>${t.eyes}</td><td>${t.leg}</td><td>${t.heldS.toFixed(1)}</td>
-      <td>${t.endedEarly ? "no" : "yes"}</td>
+      <td>${t.heldFull45 ? "yes" : "no"}</td><td>${t.endedBy}</td>
       <td><input class="notes-in" data-i="${i}" type="text" value="${t.notes || ""}"></td>
     `;
     body.appendChild(tr);
@@ -7012,9 +7305,9 @@ function balRenderLog() {
 }
 
 $("bal_exportBtn").addEventListener("click", () => {
-  const header = ["trial","eyes_condition","stance_leg","held_s","held_full_45s","notes","app_version","platform"];
+  const header = ["trial","eyes_condition","stance_leg","held_s","held_full_45s","ended_by","notes","app_version","platform"];
   const rows = balTrials.map((t) => [
-    t.idx, t.eyes.replace(" ", "_"), t.leg, t.heldS.toFixed(1), (!t.endedEarly), (t.notes || "").replace(/,/g, ";"), APP_VERSION, PLATFORM
+    t.idx, t.eyes.replace(" ", "_"), t.leg, t.heldS.toFixed(1), t.heldFull45, t.endedBy, (t.notes || "").replace(/,/g, ";"), APP_VERSION, PLATFORM
   ].join(","));
   const csv = [header.join(","), ...rows].join("\n");
   const blob = new Blob([csv], { type: "text/csv" });
@@ -7029,10 +7322,20 @@ $("bal_exportBtn").addEventListener("click", () => {
 
 <script type="module">
 
+import { PoseLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
+
 const $ = (id) => document.getElementById(id);
-const APP_VERSION = "1.0.0";
-const PLATFORM = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream ? "iOS"
-  : /Android/.test(navigator.userAgent) ? "Android" : "Desktop";
+const stsVideo = $("sts_video");
+const stsOverlay = $("sts_overlay");
+const stsCtx = stsOverlay.getContext("2d");
+
+const APP_VERSION = "2.0.0";
+function stsDetectPlatform(ua) {
+  if (/iPad|iPhone|iPod/.test(ua)) return "iOS";
+  if (/Android/.test(ua)) return "Android";
+  return "Other";
+}
+const PLATFORM = stsDetectPlatform(navigator.userAgent);
 $("sts_verPill").textContent = "v" + APP_VERSION + " · " + PLATFORM;
 
 let stsDiagLines = [];
@@ -7057,58 +7360,195 @@ $("sts_exportDiagBtn").addEventListener("click", () => {
   setTimeout(() => URL.revokeObjectURL(url), 5000);
 });
 
+// ---- Camera + model ----
+let stsStream = null;
+let stsFacing = "user";
+let stsPoseLandmarker = null;
+
+async function stsOpenCamera() {
+  if (stsStream) stsStream.getTracks().forEach(t => t.stop());
+  stsStream = await navigator.mediaDevices.getUserMedia({
+    video: { facingMode: { ideal: stsFacing }, width: { ideal: 640 }, height: { ideal: 480 } },
+    audio: false
+  });
+  stsVideo.srcObject = stsStream;
+  await stsVideo.play();
+  stsResizeOverlay();
+  stsDiag("Camera opened. facingMode=" + stsFacing);
+}
+function stsResizeOverlay() {
+  stsOverlay.width = stsVideo.videoWidth || stsVideo.clientWidth;
+  stsOverlay.height = stsVideo.videoHeight || stsVideo.clientHeight;
+}
+stsVideo.addEventListener("loadedmetadata", stsResizeOverlay);
+
+async function stsInitPose() {
+  $("sts_modelPill").innerHTML = '<span class="pill wait">loading model</span>';
+  const fileset = await FilesetResolver.forVisionTasks(
+    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
+  );
+  stsPoseLandmarker = await PoseLandmarker.createFromOptions(fileset, {
+    baseOptions: {
+      modelAssetPath: "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
+      delegate: "GPU"
+    },
+    runningMode: "VIDEO",
+    numPoses: 1
+  });
+  $("sts_modelPill").innerHTML = '<span class="pill ok">ready</span>';
+  stsDiag("PoseLandmarker model loaded.");
+}
+
+$("sts_startCamBtn").addEventListener("click", async () => {
+  $("sts_videoWrap").style.display = "block";
+  try {
+    await stsOpenCamera();
+    $("sts_camPill").innerHTML = '<span class="pill ok">live</span>';
+    if (!stsPoseLandmarker) await stsInitPose();
+    $("sts_startBtn").disabled = false;
+    stsPreviewLoop();
+  } catch (err) {
+    $("sts_camPill").innerHTML = '<span class="pill bad">denied/error</span>';
+    stsDiag("CAMERA/MODEL ERROR: " + (err.name || "") + " " + (err.message || err));
+    alert("Camera or model setup failed: " + err.message);
+  }
+});
+$("sts_switchCamBtn").addEventListener("click", async () => {
+  stsFacing = (stsFacing === "user") ? "environment" : "user";
+  try { await stsOpenCamera(); } catch (err) { alert("Could not switch camera: " + err.message); }
+});
+
+// ---- Hip-height tracking → rep counting. Same peak-detection spirit as the
+// accelerometer step-counters elsewhere in this app, but the signal here is a
+// pose landmark's vertical position instead of accelerometer magnitude: track
+// a short rolling window of hip height, set stand/sit thresholds at 35%/65%
+// of the observed range so they adapt to how each person is framed, and count
+// one rep per full standing→sitting cycle. The +/- buttons are the safety net
+// while this is uncalibrated against real reps. ----
 const STS_TEST_DUR_S = 30;
-let stsRunning = false;
+const STS_MIN_RANGE = 0.04;
+let stsTestRunning = false;
 let stsStartT = null;
 let stsRepCount = 0;
+let stsManuallyCorrected = false;
 let stsEndedEarly = false;
+let stsTrackingLostMs = 0;
+let stsLastFrameT = null;
+let stsRollingBuf = []; // {t, y}
+let stsRepState = "sitting"; // sitting | standing
 let stsTrials = [];
-let stsRaf = null;
+
+function stsPreviewLoop() {
+  requestAnimationFrame(stsPreviewLoop);
+  if (!stsPoseLandmarker || stsVideo.readyState < 2) return;
+  const now = performance.now();
+  const result = stsPoseLandmarker.detectForVideo(stsVideo, now);
+  stsCtx.clearRect(0, 0, stsOverlay.width, stsOverlay.height);
+
+  let hipY = null;
+  if (result.landmarks && result.landmarks.length > 0) {
+    const lm = result.landmarks[0];
+    const lh = lm[23], rh = lm[24];
+    const vis = ((lh.visibility ?? 1) + (rh.visibility ?? 1)) / 2;
+    if (vis > 0.5) {
+      hipY = (lh.y + rh.y) / 2;
+      const px = hipY * stsOverlay.height;
+      stsCtx.strokeStyle = "#6f4f6b";
+      stsCtx.lineWidth = 3;
+      stsCtx.beginPath();
+      stsCtx.moveTo(0, px);
+      stsCtx.lineTo(stsOverlay.width, px);
+      stsCtx.stroke();
+      stsCtx.fillStyle = "#6f4f6b";
+      stsCtx.beginPath();
+      stsCtx.arc(((lh.x + rh.x) / 2) * stsOverlay.width, px, 6, 0, 2 * Math.PI);
+      stsCtx.fill();
+    }
+  }
+
+  if (stsTestRunning) stsProcessRepFrame(now, hipY);
+}
+
+function stsProcessRepFrame(now, hipY) {
+  const dt = stsLastFrameT ? (now - stsLastFrameT) : 0;
+  stsLastFrameT = now;
+
+  if (hipY == null) {
+    stsTrackingLostMs += dt;
+    $("sts_trackHint").textContent = "Tracking lost — step back into frame.";
+    return;
+  }
+  $("sts_trackHint").textContent = "";
+
+  stsRollingBuf.push({ t: now, y: hipY });
+  while (stsRollingBuf.length && now - stsRollingBuf[0].t > 5000) stsRollingBuf.shift();
+  if (stsRollingBuf.length < 5) return;
+
+  const ys = stsRollingBuf.map(s => s.y);
+  const minY = Math.min(...ys), maxY = Math.max(...ys);
+  const range = maxY - minY;
+  if (range < STS_MIN_RANGE) return;
+
+  const standThresh = minY + range * 0.35;
+  const sitThresh = minY + range * 0.65;
+
+  if (stsRepState === "sitting" && hipY < standThresh) {
+    stsRepState = "standing";
+  } else if (stsRepState === "standing" && hipY > sitThresh) {
+    stsRepState = "sitting";
+    stsRepCount++;
+    $("sts_repCount").innerHTML = stsRepCount + ' <span class="unit">reps</span>';
+    stsDiag("Rep detected. count=" + stsRepCount + " hipY=" + hipY.toFixed(3) + " range=" + range.toFixed(3));
+  }
+}
 
 $("sts_startBtn").addEventListener("click", () => {
-  stsRepCount = 0; stsEndedEarly = false;
+  stsRepCount = 0; stsEndedEarly = false; stsManuallyCorrected = false;
+  stsTrackingLostMs = 0; stsRollingBuf = []; stsRepState = "sitting"; stsLastFrameT = null;
   $("sts_repCount").innerHTML = '0 <span class="unit">reps</span>';
   $("sts_startBtn").style.display = "none";
-  $("sts_tapBtn").disabled = false;
   $("sts_stopBtn").style.display = "block";
   $("sts_resultsSec").style.display = "none";
-  stsRunning = true;
+  stsTestRunning = true;
   stsStartT = performance.now();
   stsDiag("Test started.");
   stsTick();
 });
 
-$("sts_tapBtn").addEventListener("click", () => {
-  if (!stsRunning) return;
+$("sts_minusBtn").addEventListener("click", () => {
+  stsRepCount = Math.max(0, stsRepCount - 1);
+  stsManuallyCorrected = true;
+  $("sts_repCount").innerHTML = stsRepCount + ' <span class="unit">reps</span>';
+});
+$("sts_plusBtn").addEventListener("click", () => {
   stsRepCount++;
+  stsManuallyCorrected = true;
   $("sts_repCount").innerHTML = stsRepCount + ' <span class="unit">reps</span>';
 });
 
 $("sts_stopBtn").addEventListener("click", () => { stsEndedEarly = true; stsFinish(); });
 
 function stsTick() {
-  if (!stsRunning) return;
+  if (!stsTestRunning) return;
   const elapsedS = (performance.now() - stsStartT) / 1000;
   const remaining = Math.max(0, STS_TEST_DUR_S - elapsedS);
   $("sts_timer").textContent = remaining.toFixed(1) + "s";
   if (remaining <= 0) { stsFinish(); return; }
-  stsRaf = requestAnimationFrame(stsTick);
+  requestAnimationFrame(stsTick);
 }
 
 function stsFinish() {
-  stsRunning = false;
-  if (stsRaf) cancelAnimationFrame(stsRaf);
+  stsTestRunning = false;
   const actualDurS = (performance.now() - stsStartT) / 1000;
   $("sts_startBtn").style.display = "block";
-  $("sts_tapBtn").disabled = true;
   $("sts_stopBtn").style.display = "none";
   $("sts_resultsSec").style.display = "block";
   $("sts_resReps").textContent = stsRepCount;
   $("sts_resDur").textContent = actualDurS.toFixed(1) + "s";
   const pace = actualDurS > 0 ? (stsRepCount / actualDurS) * 30 : null;
   $("sts_resPace").textContent = pace != null ? pace.toFixed(1) + "/30s" : "—";
-  stsDiag("Test finished. reps=" + stsRepCount + " actualDurS=" + actualDurS.toFixed(1) + " endedEarly=" + stsEndedEarly);
-  stsTrials.push({ reps: stsRepCount, actualDurS, endedEarly: stsEndedEarly, notes: "" });
+  stsDiag("Test finished. reps=" + stsRepCount + " actualDurS=" + actualDurS.toFixed(1) + " endedEarly=" + stsEndedEarly + " manuallyCorrected=" + stsManuallyCorrected + " trackingLostS=" + (stsTrackingLostMs / 1000).toFixed(1));
+  stsTrials.push({ reps: stsRepCount, actualDurS, endedEarly: stsEndedEarly, manuallyCorrected: stsManuallyCorrected, trackingLostS: stsTrackingLostMs / 1000, notes: "" });
   stsRenderLog();
 }
 
@@ -7118,13 +7558,16 @@ $("sts_resetBtn").addEventListener("click", () => {
   $("sts_repCount").innerHTML = '0 <span class="unit">reps</span>';
 });
 
+function stsFmt(v, d = 1) { return v == null ? "" : v.toFixed(d); }
 function stsRenderLog() {
   const body = $("sts_logBody");
   body.innerHTML = "";
   stsTrials.forEach((t, i) => {
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td>${i + 1}</td><td>${t.reps}</td><td>${t.actualDurS.toFixed(1)}</td><td>${t.endedEarly ? "yes" : "no"}</td>
+      <td>${i + 1}</td><td>${t.reps}</td><td>${t.actualDurS.toFixed(1)}</td>
+      <td>${t.manuallyCorrected ? "yes" : "no"}</td><td>${stsFmt(t.trackingLostS)}</td>
+      <td>${t.endedEarly ? "yes" : "no"}</td>
       <td><input class="notes-in" data-i="${i}" type="text" value="${t.notes || ""}"></td>
     `;
     body.appendChild(tr);
@@ -7135,9 +7578,9 @@ function stsRenderLog() {
 }
 
 $("sts_exportBtn").addEventListener("click", () => {
-  const header = ["trial","reps","duration_s","ended_early","notes","app_version","platform"];
+  const header = ["trial","reps","duration_s","manually_corrected","tracking_lost_s","ended_early","notes","app_version","platform"];
   const rows = stsTrials.map((t, i) => [
-    i + 1, t.reps, t.actualDurS.toFixed(1), t.endedEarly, (t.notes || "").replace(/,/g, ";"), APP_VERSION, PLATFORM
+    i + 1, t.reps, t.actualDurS.toFixed(1), t.manuallyCorrected, stsFmt(t.trackingLostS), t.endedEarly, (t.notes || "").replace(/,/g, ";"), APP_VERSION, PLATFORM
   ].join(","));
   const csv = [header.join(","), ...rows].join("\n");
   const blob = new Blob([csv], { type: "text/csv" });
