@@ -934,7 +934,7 @@ body.lightpanel { background: #ffffff; }
 </head>
 <body>
 
-<div id="buildBanner"><div class="inner">Build 9 &middot; 2026-09-20 &middot; Balance: camera-facing ground-truth logging + wrong-leg voice fix</div></div>
+<div id="buildBanner"><div class="inner">Build 10 &middot; 2026-09-20 &middot; Balance: spoken end-of-trial cue</div></div>
 
 <div class="page home-wrap" data-page="home">
 
@@ -7300,6 +7300,22 @@ function balEndTrial(reason) {
   balTrials.push({ idx: balTrialIdx + 1, eyes, leg, heldS, heldFull45, endedBy: reason, notes: "" });
   balDiag("Trial " + (balTrialIdx + 1) + " (" + eyes + ") finished. heldS=" + heldS.toFixed(1) + " endedBy=" + reason);
   balRenderLog();
+
+  // Spoken end-of-trial cue — most useful on Eyes Closed trials, where the
+  // person can't see the screen to know the timer ran out or a channel
+  // tripped, and has to just wait for some signal to relax and open their eyes.
+  // balSpeak() cancels any pending speech before it talks, so on the last
+  // trial of the set this is combined with the "all done" cue into one
+  // utterance rather than two calls that would just cancel each other.
+  const heldWhole = Math.round(heldS);
+  let trialCue;
+  if (reason === "timeout") trialCue = "Trial complete. Held the full " + heldWhole + " seconds.";
+  else if (reason === "manual") trialCue = "Trial stopped. Held " + heldWhole + " seconds.";
+  else trialCue = "Trial ended. Held " + heldWhole + " seconds.";
+
+  const isLastTrial = (balTrialIdx + 1) >= BAL_SEQUENCE.length;
+  if (isLastTrial) balSpeak(trialCue + " All six trials complete.");
+  else balSpeak(trialCue);
 
   balTrialIdx++;
   if (balTrialIdx >= BAL_SEQUENCE.length) {
