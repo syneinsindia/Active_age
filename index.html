@@ -7530,10 +7530,37 @@ $("sts_startCamBtn").addEventListener("click", async () => {
     if (!stsPoseLandmarker) await stsInitPose();
     $("sts_startBtn").disabled = false;
     stsPreviewLoop();
+    stsRequestWakeLock();
   } catch (err) {
     $("sts_camPill").innerHTML = '<span class="pill bad">denied/error</span>';
     stsDiag("CAMERA/MODEL ERROR: " + (err.name || "") + " " + (err.message || err));
     alert("Camera or model setup failed: " + err.message);
+  }
+});
+
+// Keep the screen awake once the camera's live — with no touch input during
+// a self-timed trial, phones dim and lock the screen mid-test otherwise
+// (seen directly: a real capture session went dark partway through). Best
+// effort only: unsupported browsers just fall back to their normal behavior.
+let stsWakeLock = null;
+async function stsRequestWakeLock() {
+  try {
+    if (!("wakeLock" in navigator)) {
+      stsDiag("Wake Lock API not supported on this browser — screen may still sleep/dim during a trial.");
+      return;
+    }
+    stsWakeLock = await navigator.wakeLock.request("screen");
+    stsDiag("Screen wake lock acquired.");
+    stsWakeLock.addEventListener("release", () => stsDiag("Screen wake lock released."));
+  } catch (err) {
+    stsDiag("Wake lock request failed: " + (err.name || "") + " " + (err.message || err));
+  }
+}
+document.addEventListener("visibilitychange", () => {
+  // The OS auto-releases the lock when the tab/app is backgrounded; re-acquire
+  // as soon as it's visible again, if the camera's still meant to be live.
+  if (document.visibilityState === "visible" && stsStream && !stsWakeLock) {
+    stsRequestWakeLock();
   }
 });
 function stsUpdateCamButtons() {
@@ -7569,6 +7596,7 @@ let stsEndedEarly = false;
 let stsTrackingLostMs = 0;
 let stsLastFrameT = null;
 let stsRollingBuf = []; // {t, y}
+let stsGoodFrameStreak = 0; // consecutive frames with a valid hip reading, since tracking last reacquired
 let stsRepState = "sitting"; // sitting | standing
 let stsTrials = [];
 let stsTraceLog = []; // {t_ms, y, state, event} — frame-by-frame log for the trial in progress
@@ -7714,10 +7742,20 @@ function stsProcessRepFrame(now, hipY) {
 
   if (hipY == null) {
     stsTrackingLostMs += dt;
+    stsGoodFrameStreak = 0;
     $("sts_trackHint").textContent = "Tracking lost — step back into frame.";
     return { rep: false, range: null, standThresh: null, sitThresh: null };
   }
   $("sts_trackHint").textContent = "";
+  stsGoodFrameStreak++;
+
+  // The first frame right after tracking reacquires is disproportionately
+  // likely to be a noisy/transient landmark position (seen directly in a
+  // real capture: a reacquisition sample landed far outside the surrounding
+  // readings and briefly inflated the rolling range). Skip feeding that one
+  // frame into the range/threshold calculation — wait for a second
+  // consecutive good frame to confirm it's real tracking, not a blip.
+  if (stsGoodFrameStreak < 2) return { rep: false, range: null, standThresh: null, sitThresh: null };
 
   stsRollingBuf.push({ t: now, y: hipY });
   while (stsRollingBuf.length && now - stsRollingBuf[0].t > 5000) stsRollingBuf.shift();
@@ -7747,6 +7785,7 @@ function stsProcessRepFrame(now, hipY) {
 $("sts_startBtn").addEventListener("click", () => {
   stsRepCount = 0; stsEndedEarly = false; stsManuallyCorrected = false;
   stsTrackingLostMs = 0; stsRollingBuf = []; stsRepState = "sitting"; stsLastFrameT = null;
+  stsGoodFrameStreak = 0;
   stsTraceLog = [];
   $("sts_repCount").innerHTML = '0 <span class="unit">reps</span>';
   $("sts_startBtn").style.display = "none";
@@ -7849,6 +7888,9 @@ function stsFinish() {
   $("sts_resDur").textContent = actualDurS.toFixed(1) + "s";
   const pace = actualDurS > 0 ? (stsRepCount / actualDurS) * 30 : null;
   $("sts_resPace").textContent = pace != null ? pace.toFixed(1) + "/30s" : "—";
+  stsSpeak(stsEndedEarly
+    ? "Test stopped. " + stsRepCount + (stsRepCount === 1 ? " rep." : " reps.")
+    : "Test complete. " + stsRepCount + (stsRepCount === 1 ? " rep." : " reps.") + " Check the count and correct it if needed.");
   stsDiag("Test finished. reps=" + stsRepCount + " actualDurS=" + actualDurS.toFixed(1) + " endedEarly=" + stsEndedEarly + " manuallyCorrected=" + stsManuallyCorrected + " trackingLostS=" + (stsTrackingLostMs / 1000).toFixed(1));
   stsTrials.push({ reps: stsRepCount, actualDurS, endedEarly: stsEndedEarly, manuallyCorrected: stsManuallyCorrected, trackingLostS: stsTrackingLostMs / 1000, notes: "" });
   stsLastTrace = stsTraceLog.slice();
