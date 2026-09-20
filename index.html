@@ -783,6 +783,9 @@ body.lightpanel { background: #ffffff; }
 .panel-sts .pill.ok { background: #e2f0e6; color: #2f6f4f; }
 .panel-sts .pill.bad { background: #f7e3da; color: var(--warn); }
 .panel-sts .pill.wait { background: #eee; color: var(--muted); }
+.panel-sts label { font-size: 0.85rem; display: block; margin-bottom: 4px; }
+.panel-sts input[type=number] { width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; font-size: 1rem; margin-bottom: 10px; }
+.panel-sts .big-phase { font-family: var(--mono); font-size: 1rem; text-align: center; margin: 2px 0; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: .04em; min-height: 1.2em; }
 .panel-sts .big-timer { font-family: var(--mono); font-size: 2.6rem; text-align: center; margin: 6px 0; font-weight: 700; color: var(--accent); }
 .panel-sts .step-count { font-family: var(--mono); font-size: 2rem; text-align: center; margin: 2px 0; font-weight: 700; color: var(--accent); }
 .panel-sts .step-count .unit { font-size: 0.9rem; font-weight: 400; color: var(--muted); }
@@ -1930,7 +1933,7 @@ body.lightpanel { background: #ffffff; }
 <p class="sub">How long you can hold your balance standing on one leg — eyes open, then eyes closed. Camera-tracked: watches your arms, raised foot, stance foot, and (on eyes-closed trials) your eyes, and stops the timer automatically when any of them breaks position.</p>
 
 <div class="caveat">
-  <b>Prop your phone against something stable, facing you, far enough back to see your whole body — head to feet.</b> Bare feet, hands on hips or arms crossed over your chest, raised foot held near (not touching) your stance-leg ankle. This is a first-pass automatic build — if the camera doesn't catch it, tap "I lost balance" yourself; that always works as a backup, and every trial records which of the two ended it.
+  <b>Use a phone's back camera, not a laptop webcam.</b> A webcam's wide-angle lens can't frame a full body cleanly at normal desk distance — you either get cropped or distorted. Prop the phone against something stable (a shelf, a stack of books), back camera facing you, far enough back that your whole body is in frame — head to feet. Match the "FEET HERE" line on screen while you're still close enough to check it, then step back into position. Bare feet, hands on hips or arms crossed over your chest, raised foot held near (not touching) your stance-leg ankle. This is a first-pass automatic build — if the camera doesn't catch it, tap "I lost balance" yourself; that always works as a backup, and every trial records which of the two ended it.
 </div>
 
 <section>
@@ -1940,10 +1943,13 @@ body.lightpanel { background: #ffffff; }
     <option value="right" selected>Right leg</option>
     <option value="left">Left leg</option>
   </select>
+  <label>Camera</label>
   <div class="row">
-    <button id="bal_startCamBtn" class="btn-secondary">Start Camera</button>
-    <button id="bal_switchCamBtn" class="btn-secondary">Switch Camera</button>
+    <button id="bal_camFrontBtn" class="btn-secondary">Front camera</button>
+    <button id="bal_camBackBtn" class="btn-primary">Back camera</button>
   </div>
+  <button id="bal_startCamBtn" class="btn-secondary">Start Camera</button>
+  <p class="hint">Either camera works — pick whichever lets you fit your whole body in frame. Tap again anytime, even after the camera's already live, to switch.</p>
   <div class="row">
     <span id="bal_camPill" class="pill wait">not started</span>
     <span id="bal_poseModelPill" class="pill wait"></span>
@@ -2013,15 +2019,18 @@ body.lightpanel { background: #ffffff; }
 <p class="sub">Stand up and sit back down as many times as you safely can in 30 seconds &mdash; the standard 30-second chair-stand test (same protocol family as the CDC STEADI Chair Stand). Camera-tracked: counts each full stand-sit cycle automatically by watching your hip height.</p>
 
 <div class="caveat">
-  <b>Prop your phone facing you, far enough back to see you fully stand and fully sit.</b> Use a sturdy, armless chair against a wall so it can't slide. Arms crossed over your chest, feet flat. Stop immediately if you feel unsteady. This is a first-pass automatic count — check it against the live number and use the +/&minus; buttons to correct it if the camera misses a rep or double-counts one.
+  <b>Use a phone's back camera, not a laptop webcam.</b> A webcam's wide-angle lens can't frame a full sit-to-stand cleanly at normal desk distance — you either get cropped or distorted. Prop the phone against something stable, back camera facing you, far enough back that you're fully in frame both sitting and standing — match the "CHAIR HERE" line on screen while you're still close enough to check it, then set the chair there. Use a sturdy, armless chair against a wall so it can't slide. Arms crossed over your chest, feet flat. Stop immediately if you feel unsteady. This is a first-pass automatic count — check it against the live number and use the +/&minus; buttons to correct it if the camera misses a rep or double-counts one.
 </div>
 
 <section>
   <h2>1 · Camera</h2>
+  <label>Camera</label>
   <div class="row">
-    <button id="sts_startCamBtn" class="btn-secondary">Start Camera</button>
-    <button id="sts_switchCamBtn" class="btn-secondary">Switch Camera</button>
+    <button id="sts_camFrontBtn" class="btn-secondary">Front camera</button>
+    <button id="sts_camBackBtn" class="btn-primary">Back camera</button>
   </div>
+  <button id="sts_startCamBtn" class="btn-secondary">Start Camera</button>
+  <p class="hint">Either camera works — pick whichever lets you fit yourself fully in frame, sitting and standing. Tap again anytime, even after the camera's already live, to switch.</p>
   <div class="row">
     <span id="sts_camPill" class="pill wait">not started</span>
     <span id="sts_modelPill" class="pill wait"></span>
@@ -2034,12 +2043,15 @@ body.lightpanel { background: #ffffff; }
 
 <section>
   <h2>2 · Get ready</h2>
-  <p class="hint">Sit with your back straight, feet flat, arms crossed over your chest. When you tap Start, the 30-second timer begins immediately — get into the ready position first.</p>
-  <button id="sts_startBtn" class="btn-primary" disabled>Start 30s Test</button>
+  <p class="hint">Tap Start, then you'll have time to walk to your chair and get seated before the 30-second test actually begins — you'll hear it count you in.</p>
+  <label for="sts_readyTime">Time to walk to your chair (seconds)</label>
+  <input type="number" id="sts_readyTime" value="8" min="0" max="30" step="1">
+  <button id="sts_startBtn" class="btn-primary" disabled>Start</button>
 </section>
 
 <section>
   <h2>3 · Test</h2>
+  <div class="big-phase" id="sts_bigPhase"></div>
   <div class="big-timer" id="sts_timer">30.0s</div>
   <div class="step-count" id="sts_repCount">0 <span class="unit">reps</span></div>
   <div class="row">
@@ -6983,7 +6995,7 @@ $("bal_exportDiagBtn").addEventListener("click", () => {
 
 // ---- Camera + models ----
 let balStream = null;
-let balFacing = "user";
+let balFacing = "environment"; // back camera by default — a laptop webcam's wide lens can't frame a full body cleanly at normal room distances; a phone's rear camera, propped further back, can
 let balPoseLandmarker = null;
 let balFaceLandmarker = null;
 
@@ -7054,10 +7066,21 @@ $("bal_startCamBtn").addEventListener("click", async () => {
     alert("Camera or model setup failed: " + err.message);
   }
 });
-$("bal_switchCamBtn").addEventListener("click", async () => {
-  balFacing = (balFacing === "user") ? "environment" : "user";
-  try { await balOpenCamera(); } catch (err) { alert("Could not switch camera: " + err.message); }
-});
+function balUpdateCamButtons() {
+  $("bal_camFrontBtn").className = balFacing === "user" ? "btn-primary" : "btn-secondary";
+  $("bal_camBackBtn").className = balFacing === "environment" ? "btn-primary" : "btn-secondary";
+}
+async function balSetFacing(facing) {
+  if (balFacing === facing) return;
+  balFacing = facing;
+  balUpdateCamButtons();
+  if (balStream) { // camera's already live — switch it now rather than waiting for Start Camera
+    try { await balOpenCamera(); } catch (err) { alert("Could not switch camera: " + err.message); }
+  }
+}
+$("bal_camFrontBtn").addEventListener("click", () => balSetFacing("user"));
+$("bal_camBackBtn").addEventListener("click", () => balSetFacing("environment"));
+balUpdateCamButtons();
 
 // ---- Trial protocol: calibrate a short baseline per trial (wrist distance,
 // raised-ankle position, stance-ankle position), then watch four channels —
@@ -7195,6 +7218,35 @@ function balDrawAngleMark(A, B, C, angle) {
   balCtx.fillText(label, bx + 12, by - 12);
 }
 
+// Framing guide, same visual language as the Range of Motion tool's "stand
+// here" line — a dashed yellow marker plus a text label. Drawn every frame,
+// live camera is on, regardless of tracking state, so someone positioning
+// the phone before a trial can see where to stand while still close enough
+// to read the screen. ----
+function balDrawFrameGuide() {
+  if (!balOverlay.width || !balOverlay.height) return;
+  const y = balOverlay.height * 0.94;
+  balCtx.save();
+  balCtx.setLineDash([10, 8]);
+  balCtx.strokeStyle = "rgba(255, 209, 77, 0.95)";
+  balCtx.lineWidth = 3;
+  balCtx.beginPath();
+  balCtx.moveTo(balOverlay.width * 0.06, y);
+  balCtx.lineTo(balOverlay.width * 0.94, y);
+  balCtx.stroke();
+  balCtx.restore();
+  const label = "FEET HERE — whole body, head to feet, in frame";
+  balCtx.font = "bold 12px sans-serif";
+  const textWidth = balCtx.measureText(label).width;
+  const pad = 7;
+  const boxX = balOverlay.width / 2 - textWidth / 2 - pad;
+  const boxY = y - 27;
+  balCtx.fillStyle = "rgba(0,0,0,0.6)";
+  balCtx.fillRect(boxX, boxY, textWidth + pad * 2, 19);
+  balCtx.fillStyle = "#fff";
+  balCtx.fillText(label, balOverlay.width / 2 - textWidth / 2, boxY + 13.5);
+}
+
 function balLoop() {
   requestAnimationFrame(balLoop);
   if (!balPoseLandmarker || balVideo.readyState < 2) return;
@@ -7202,6 +7254,7 @@ function balLoop() {
 
   const poseResult = balPoseLandmarker.detectForVideo(balVideo, now);
   balCtx.clearRect(0, 0, balOverlay.width, balOverlay.height);
+  balDrawFrameGuide();
   const lm = (poseResult.landmarks && poseResult.landmarks.length > 0) ? poseResult.landmarks[0] : null;
 
   let faceScore = null;
@@ -7407,6 +7460,20 @@ window.addEventListener("unhandledrejection", (e) => stsDiag("UNHANDLED PROMISE 
 stsDiag("App version: " + APP_VERSION + " | Platform: " + PLATFORM);
 stsDiag("Page loaded. UA: " + navigator.userAgent);
 
+// Voice cues for the get-ready countdown — best-effort only, the on-screen
+// number/phase text is the source of truth if speech isn't available.
+function stsSpeak(text) {
+  try {
+    if (!("speechSynthesis" in window)) return;
+    window.speechSynthesis.cancel(); // don't let cues queue up and lag behind the visible countdown
+    const u = new SpeechSynthesisUtterance(text);
+    u.rate = 1.05;
+    window.speechSynthesis.speak(u);
+  } catch (err) {
+    stsDiag("Speech synthesis failed: " + (err.message || err));
+  }
+}
+
 $("sts_exportDiagBtn").addEventListener("click", () => {
   const blob = new Blob([stsDiagLines.join("\n")], { type: "text/plain" });
   const url = URL.createObjectURL(blob);
@@ -7418,7 +7485,7 @@ $("sts_exportDiagBtn").addEventListener("click", () => {
 
 // ---- Camera + model ----
 let stsStream = null;
-let stsFacing = "user";
+let stsFacing = "environment"; // back camera by default — a laptop webcam's wide lens can't frame a full sit-to-stand cleanly at normal room distances; a phone's rear camera, propped further back, can
 let stsPoseLandmarker = null;
 
 async function stsOpenCamera() {
@@ -7469,10 +7536,21 @@ $("sts_startCamBtn").addEventListener("click", async () => {
     alert("Camera or model setup failed: " + err.message);
   }
 });
-$("sts_switchCamBtn").addEventListener("click", async () => {
-  stsFacing = (stsFacing === "user") ? "environment" : "user";
-  try { await stsOpenCamera(); } catch (err) { alert("Could not switch camera: " + err.message); }
-});
+function stsUpdateCamButtons() {
+  $("sts_camFrontBtn").className = stsFacing === "user" ? "btn-primary" : "btn-secondary";
+  $("sts_camBackBtn").className = stsFacing === "environment" ? "btn-primary" : "btn-secondary";
+}
+async function stsSetFacing(facing) {
+  if (stsFacing === facing) return;
+  stsFacing = facing;
+  stsUpdateCamButtons();
+  if (stsStream) { // camera's already live — switch it now rather than waiting for Start Camera
+    try { await stsOpenCamera(); } catch (err) { alert("Could not switch camera: " + err.message); }
+  }
+}
+$("sts_camFrontBtn").addEventListener("click", () => stsSetFacing("user"));
+$("sts_camBackBtn").addEventListener("click", () => stsSetFacing("environment"));
+stsUpdateCamButtons();
 
 // ---- Hip-height tracking → rep counting. Same peak-detection spirit as the
 // accelerometer step-counters elsewhere in this app, but the signal here is a
@@ -7495,6 +7573,10 @@ let stsRepState = "sitting"; // sitting | standing
 let stsTrials = [];
 let stsTraceLog = []; // {t_ms, y, state, event} — frame-by-frame log for the trial in progress
 let stsLastTrace = []; // snapshot of stsTraceLog from the most recently finished trial, for export
+let stsCountdownActive = false; // "get ready, walk to your chair" phase, before the 30s test actually starts
+let stsCountdownStartT = null;
+let stsCountdownMs = 0;
+let stsLastSpokenSecond = null;
 
 // ---- Angle mark (visual only — not used for rep detection, which is driven
 // entirely by hip height above). Shows knee angle (hip–knee–ankle) on
@@ -7543,12 +7625,40 @@ function stsDrawAngleMark(A, B, C, angle) {
   stsCtx.fillText(label, bx + 12, by - 12);
 }
 
+// Framing guide, same visual language as the Range of Motion tool's "stand
+// here" line — dashed yellow marker plus a text label, drawn every frame
+// the camera is live so someone positioning the chair/phone can see it. ----
+function stsDrawFrameGuide() {
+  if (!stsOverlay.width || !stsOverlay.height) return;
+  const y = stsOverlay.height * 0.92;
+  stsCtx.save();
+  stsCtx.setLineDash([10, 8]);
+  stsCtx.strokeStyle = "rgba(255, 209, 77, 0.95)";
+  stsCtx.lineWidth = 3;
+  stsCtx.beginPath();
+  stsCtx.moveTo(stsOverlay.width * 0.06, y);
+  stsCtx.lineTo(stsOverlay.width * 0.94, y);
+  stsCtx.stroke();
+  stsCtx.restore();
+  const label = "CHAIR HERE — you fully in frame, sitting & standing";
+  stsCtx.font = "bold 12px sans-serif";
+  const textWidth = stsCtx.measureText(label).width;
+  const pad = 7;
+  const boxX = stsOverlay.width / 2 - textWidth / 2 - pad;
+  const boxY = y - 27;
+  stsCtx.fillStyle = "rgba(0,0,0,0.6)";
+  stsCtx.fillRect(boxX, boxY, textWidth + pad * 2, 19);
+  stsCtx.fillStyle = "#fff";
+  stsCtx.fillText(label, stsOverlay.width / 2 - textWidth / 2, boxY + 13.5);
+}
+
 function stsPreviewLoop() {
   requestAnimationFrame(stsPreviewLoop);
   if (!stsPoseLandmarker || stsVideo.readyState < 2) return;
   const now = performance.now();
   const result = stsPoseLandmarker.detectForVideo(stsVideo, now);
   stsCtx.clearRect(0, 0, stsOverlay.width, stsOverlay.height);
+  stsDrawFrameGuide();
 
   let hipY = null;
   if (result.landmarks && result.landmarks.length > 0) {
@@ -7642,11 +7752,54 @@ $("sts_startBtn").addEventListener("click", () => {
   $("sts_startBtn").style.display = "none";
   $("sts_stopBtn").style.display = "block";
   $("sts_resultsSec").style.display = "none";
+
+  const readyMs = Math.max(0, parseFloat($("sts_readyTime").value) || 0) * 1000;
+  if (readyMs > 0) {
+    stsCountdownMs = readyMs;
+    stsCountdownActive = true;
+    stsCountdownStartT = performance.now();
+    stsLastSpokenSecond = null;
+    stsDiag("Ready countdown started. readyMs=" + readyMs);
+    stsSpeak("Get ready. Go to your chair now.");
+    stsCountdownLoop();
+  } else {
+    $("sts_bigPhase").textContent = "";
+    stsBeginTest();
+  }
+});
+
+// Get-ready countdown: gives whoever tapped Start time to actually walk to
+// the chair (if the phone's propped across the room) before the 30-second
+// test clock starts. On-screen number counts down every frame; voice speaks
+// the last three seconds and "Go!" so you don't have to be looking at the
+// screen while you're getting seated.
+function stsCountdownLoop() {
+  if (!stsCountdownActive) return;
+  const elapsed = performance.now() - stsCountdownStartT;
+  const remainMs = Math.max(0, stsCountdownMs - elapsed);
+  const remainS = Math.ceil(remainMs / 1000);
+  $("sts_bigPhase").textContent = "get ready — walk to your chair";
+  $("sts_timer").textContent = remainS + "s";
+  if (remainS <= 3 && remainS >= 1 && stsLastSpokenSecond !== remainS) {
+    stsLastSpokenSecond = remainS;
+    stsSpeak(String(remainS));
+  }
+  if (remainMs <= 0) {
+    stsCountdownActive = false;
+    $("sts_bigPhase").textContent = "go!";
+    stsSpeak("Go!");
+    stsBeginTest();
+    return;
+  }
+  requestAnimationFrame(stsCountdownLoop);
+}
+
+function stsBeginTest() {
   stsTestRunning = true;
   stsStartT = performance.now();
   stsDiag("Test started. config: STS_MIN_RANGE=" + STS_MIN_RANGE + " standThreshFrac=0.35 sitThreshFrac=0.65 rollingWindowMs=5000");
   stsTick();
-});
+}
 
 $("sts_minusBtn").addEventListener("click", () => {
   stsRepCount = Math.max(0, stsRepCount - 1);
@@ -7661,12 +7814,25 @@ $("sts_plusBtn").addEventListener("click", () => {
   stsTraceLog.push({ t: Math.round(performance.now() - stsStartT), y: "", state: stsRepState, range: "", standThresh: "", sitThresh: "", event: "manual_plus" });
 });
 
-$("sts_stopBtn").addEventListener("click", () => { stsEndedEarly = true; stsFinish(); });
+$("sts_stopBtn").addEventListener("click", () => {
+  if (stsCountdownActive) {
+    stsCountdownActive = false;
+    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+    $("sts_bigPhase").textContent = "";
+    $("sts_timer").textContent = STS_TEST_DUR_S.toFixed(1) + "s";
+    $("sts_startBtn").style.display = "block";
+    $("sts_stopBtn").style.display = "none";
+    stsDiag("Countdown cancelled before test started.");
+    return;
+  }
+  stsEndedEarly = true; stsFinish();
+});
 
 function stsTick() {
   if (!stsTestRunning) return;
   const elapsedS = (performance.now() - stsStartT) / 1000;
   const remaining = Math.max(0, STS_TEST_DUR_S - elapsedS);
+  $("sts_bigPhase").textContent = "";
   $("sts_timer").textContent = remaining.toFixed(1) + "s";
   if (remaining <= 0) { stsFinish(); return; }
   requestAnimationFrame(stsTick);
@@ -7675,6 +7841,7 @@ function stsTick() {
 function stsFinish() {
   stsTestRunning = false;
   const actualDurS = (performance.now() - stsStartT) / 1000;
+  $("sts_bigPhase").textContent = "";
   $("sts_startBtn").style.display = "block";
   $("sts_stopBtn").style.display = "none";
   $("sts_resultsSec").style.display = "block";
