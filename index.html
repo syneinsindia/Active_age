@@ -2076,7 +2076,7 @@ body.lightpanel { background: #ffffff; }
   <h2>Trial log</h2>
   <div class="table-scroll">
     <table id="sts_logTable">
-      <thead><tr><th>#</th><th>Reps</th><th>Duration (s)</th><th>Manually corrected</th><th>Tracking lost (s)</th><th>Ended early</th><th>Notes</th></tr></thead>
+      <thead><tr><th>#</th><th>Reps</th><th>Duration (s)</th><th>Manually corrected</th><th>Tracking lost (s)</th><th>Ended early</th><th>Final stand credited</th><th>Notes</th></tr></thead>
       <tbody id="sts_logBody"></tbody>
     </table>
   </div>
@@ -7879,6 +7879,29 @@ function stsTick() {
 
 function stsFinish() {
   stsTestRunning = false;
+
+  // Standard scoring rule for this test family: a stand already well
+  // underway when time runs out still counts. CDC STEADI's 30-Second Chair
+  // Stand instructions: "If the patient is over halfway to a standing
+  // position when 30 seconds have elapsed, count it as a stand." Lein et
+  // al. 2022 — one of this tool's own two normative sources — states the
+  // same rule independently: a final cycle that's "more than half" done at
+  // cutoff is counted. Our stand/sit hysteresis only flips into the
+  // "standing" state once someone is already past the 35%-from-full-stand
+  // mark (i.e. well beyond halfway), so ending the trial already in that
+  // state is itself evidence of a >halfway stand — credit it rather than
+  // silently dropping it, which is what a real observer manually counting
+  // alongside the test will also do.
+  let creditedFinalStand = false;
+  if (stsRepState === "standing") {
+    stsRepCount++;
+    stsRepState = "sitting";
+    creditedFinalStand = true;
+    $("sts_repCount").innerHTML = stsRepCount + ' <span class="unit">reps</span>';
+    stsDiag("Final in-progress stand credited as a completed rep at cutoff (CDC STEADI / Lein 2022 halfway rule). count=" + stsRepCount);
+    stsTraceLog.push({ t: Math.round(performance.now() - stsStartT), y: "", state: "sitting", range: "", standThresh: "", sitThresh: "", event: "credited_final_stand" });
+  }
+
   const actualDurS = (performance.now() - stsStartT) / 1000;
   $("sts_bigPhase").textContent = "";
   $("sts_startBtn").style.display = "block";
@@ -7892,7 +7915,7 @@ function stsFinish() {
     ? "Test stopped. " + stsRepCount + (stsRepCount === 1 ? " rep." : " reps.")
     : "Test complete. " + stsRepCount + (stsRepCount === 1 ? " rep." : " reps.") + " Check the count and correct it if needed.");
   stsDiag("Test finished. reps=" + stsRepCount + " actualDurS=" + actualDurS.toFixed(1) + " endedEarly=" + stsEndedEarly + " manuallyCorrected=" + stsManuallyCorrected + " trackingLostS=" + (stsTrackingLostMs / 1000).toFixed(1));
-  stsTrials.push({ reps: stsRepCount, actualDurS, endedEarly: stsEndedEarly, manuallyCorrected: stsManuallyCorrected, trackingLostS: stsTrackingLostMs / 1000, notes: "" });
+  stsTrials.push({ reps: stsRepCount, actualDurS, endedEarly: stsEndedEarly, manuallyCorrected: stsManuallyCorrected, trackingLostS: stsTrackingLostMs / 1000, finalStandCredited: creditedFinalStand, notes: "" });
   stsLastTrace = stsTraceLog.slice();
   stsDiag("Raw trace captured for this trial. samples=" + stsLastTrace.length);
   stsRenderLog();
@@ -7913,7 +7936,7 @@ function stsRenderLog() {
     tr.innerHTML = `
       <td>${i + 1}</td><td>${t.reps}</td><td>${t.actualDurS.toFixed(1)}</td>
       <td>${t.manuallyCorrected ? "yes" : "no"}</td><td>${stsFmt(t.trackingLostS)}</td>
-      <td>${t.endedEarly ? "yes" : "no"}</td>
+      <td>${t.endedEarly ? "yes" : "no"}</td><td>${t.finalStandCredited ? "yes" : "no"}</td>
       <td><input class="notes-in" data-i="${i}" type="text" value="${t.notes || ""}"></td>
     `;
     body.appendChild(tr);
@@ -7924,9 +7947,9 @@ function stsRenderLog() {
 }
 
 $("sts_exportBtn").addEventListener("click", () => {
-  const header = ["trial","reps","duration_s","manually_corrected","tracking_lost_s","ended_early","notes","app_version","platform"];
+  const header = ["trial","reps","duration_s","manually_corrected","tracking_lost_s","ended_early","final_stand_credited","notes","app_version","platform"];
   const rows = stsTrials.map((t, i) => [
-    i + 1, t.reps, t.actualDurS.toFixed(1), t.manuallyCorrected, stsFmt(t.trackingLostS), t.endedEarly, (t.notes || "").replace(/,/g, ";"), APP_VERSION, PLATFORM
+    i + 1, t.reps, t.actualDurS.toFixed(1), t.manuallyCorrected, stsFmt(t.trackingLostS), t.endedEarly, t.finalStandCredited, (t.notes || "").replace(/,/g, ";"), APP_VERSION, PLATFORM
   ].join(","));
   const csv = [header.join(","), ...rows].join("\n");
   const blob = new Blob([csv], { type: "text/csv" });
