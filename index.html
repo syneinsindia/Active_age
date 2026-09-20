@@ -746,6 +746,8 @@ body.lightpanel { background: #ffffff; }
 .panel-balance .pill.bad { background: #f7e3da; color: var(--warn); }
 .panel-balance .pill.wait { background: #eee; color: var(--muted); }
 .panel-balance .big-timer { font-family: var(--mono); font-size: 2.6rem; text-align: center; margin: 6px 0; font-weight: 700; color: var(--accent); }
+.panel-balance .big-phase { font-family: var(--mono); font-size: 1rem; text-align: center; margin: 2px 0; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: .04em; min-height: 1.2em; }
+.panel-balance input[type="number"] { width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; font-size: 0.95rem; margin-bottom: 10px; }
 .panel-balance .hint { font-size: 0.78rem; color: var(--muted); line-height: 1.5; margin: 6px 0 0; }
 .panel-balance .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .panel-balance .row > button { width: auto; flex: 1; margin-bottom: 8px; }
@@ -1933,7 +1935,7 @@ body.lightpanel { background: #ffffff; }
 <p class="sub">How long you can hold your balance standing on one leg — eyes open, then eyes closed. Camera-tracked: watches your arms, raised foot, stance foot, and (on eyes-closed trials) your eyes, and stops the timer automatically when any of them breaks position.</p>
 
 <div class="caveat">
-  <b>Use a phone's back camera, not a laptop webcam.</b> A webcam's wide-angle lens can't frame a full body cleanly at normal desk distance — you either get cropped or distorted. Prop the phone against something stable (a shelf, a stack of books), back camera facing you, far enough back that your whole body is in frame — head to feet. Match the "FEET HERE" line on screen while you're still close enough to check it, then step back into position. Bare feet, hands on hips or arms crossed over your chest, raised foot held near (not touching) your stance-leg ankle. This is a first-pass automatic build — if the camera doesn't catch it, tap "I lost balance" yourself; that always works as a backup, and every trial records which of the two ended it.
+  <b>Use a phone's back camera, not a laptop webcam.</b> A webcam's wide-angle lens can't frame a full body cleanly at normal desk distance — you either get cropped or distorted. Prop the phone against something stable (a shelf, a stack of books), back camera facing you, far enough back that your whole body is in frame — head to feet. Match the "FEET HERE" line on screen while you're still close enough to check it, then step back into position. Bare feet, hands on hips or arms crossed over your chest, raised foot held near (not touching) your stance-leg ankle. Tapping Start Trial begins a short voice-guided count-in — the camera checks you're on the leg picked below during that count-in and while calibrating, and speaks a correction ("wrong leg") if it isn't, restarting the count-in automatically. This is a first-pass automatic build — if the camera doesn't catch it, tap "I lost balance" yourself; that always works as a backup, and every trial records which of the two ended it.
 </div>
 
 <section>
@@ -1968,10 +1970,13 @@ body.lightpanel { background: #ffffff; }
 
 <section id="bal_trialSection" style="display:none;">
   <h2>3 · Trial <span id="bal_trialNum">1</span> of 6 — <span id="bal_condLabel">Eyes Open</span></h2>
+  <label for="bal_readyTime">Time to get set, before each trial (seconds)</label>
+  <input type="number" id="bal_readyTime" value="5" min="0" max="20" step="1">
   <button id="bal_startBtn" class="btn-primary" disabled>Start Trial</button>
   <button id="bal_stopBtn" class="btn-warn" style="display:none;">I lost balance / Stop</button>
+  <div class="big-phase" id="bal_bigPhase"></div>
   <div class="big-timer" id="bal_timer">—</div>
-  <p class="hint" id="bal_liveHint">Get into position, then tap Start the moment you lift your foot.</p>
+  <p class="hint" id="bal_liveHint">Tap Start Trial, then use the count-in to get into position — camera checks you're on the right leg before it calibrates.</p>
   <div class="channel-grid" id="bal_channelGrid" style="display:none;">
     <div class="channel-card" id="bal_chArms"><div class="lbl">Arms</div><div class="state">holding</div></div>
     <div class="channel-card" id="bal_chFoot"><div class="lbl">Raised foot</div><div class="state">holding</div></div>
@@ -6993,6 +6998,18 @@ $("bal_exportDiagBtn").addEventListener("click", () => {
   setTimeout(() => URL.revokeObjectURL(url), 5000);
 });
 
+function balSpeak(text) {
+  try {
+    if (!("speechSynthesis" in window)) return;
+    window.speechSynthesis.cancel(); // don't let cues queue up and lag behind the visible countdown
+    const u = new SpeechSynthesisUtterance(text);
+    u.rate = 1.05;
+    window.speechSynthesis.speak(u);
+  } catch (err) {
+    balDiag("Speech synthesis failed: " + (err.message || err));
+  }
+}
+
 // ---- Camera + models ----
 let balStream = null;
 let balFacing = "environment"; // back camera by default — a laptop webcam's wide lens can't frame a full body cleanly at normal room distances; a phone's rear camera, propped further back, can
@@ -7099,13 +7116,37 @@ const STANCE_DRIFT_THRESH = 0.15; // normalized coords, cumulative stance-ankle 
 const EYE_OPEN_TRIGGER = 0.3;     // averaged eyeBlinkLeft/Right blendshape score
 
 let balTrialIdx = 0;
-let balPhase = "idle"; // idle | calibrating | active | done
+let balPhase = "idle"; // idle | countdown | calibrating | active | done
 let balCalibStartT = null;
 let balActiveStartT = null;
 let balCalibSamples = { wristDist: [], raisedAnkle: [], stanceAnkle: [] };
 let balBaseline = { wristDist: null, raisedAnkle: null, stanceAnkle: null };
 let balPrevStanceAnkle = null;
 let balTrials = []; // { idx, eyes, leg, heldS, heldFull45, endedBy, notes }
+
+// ---- Get-ready countdown (same pattern as Sit-to-Stand's) — gives the
+// person time to walk back into position and get up on the right leg after
+// tapping Start, with voice cues so they don't have to be looking at the
+// screen. ----
+let balCountdownActive = false;
+let balCountdownStartT = null;
+let balCountdownMs = 0;
+let balLastSpokenSecond = null;
+
+// ---- Wrong-leg detection — found from a real capture where the leg
+// actually balanced on didn't match the "Stance leg" dropdown, which sent
+// calibration chasing bad landmark assumptions (long "tracking lost" spells,
+// a near-instant false trigger). A weight-bearing leg stands nearly straight
+// (knee angle close to 180°); a raised, tucked leg is visibly more bent. We
+// already compute knee angle for the blue angle-mark overlay, so the same
+// geometry — on BOTH legs, not just the assumed-raised one — tells us which
+// leg is actually planted, independent of the dropdown. ----
+let balLastLm = null;
+let balLegMismatchStreak = 0;
+let balLastLegVoiceT = 0;
+const LEG_MISMATCH_ANGLE_GAP = 20;   // degrees — how much straighter one knee must be than the other before we trust which leg is actually planted
+const LEG_MISMATCH_STREAK_NEEDED = 8; // consecutive confident frames before acting — filters out a mid-transition glance
+const LEG_VOICE_COOLDOWN_MS = 4000;
 
 function balUpdateHeader() {
   $("bal_trialNum").textContent = balTrialIdx + 1;
@@ -7127,21 +7168,87 @@ function balResetChannels() {
 }
 
 $("bal_startBtn").addEventListener("click", () => {
+  $("bal_startBtn").style.display = "none";
+  $("bal_stopBtn").style.display = "block";
+  balLegMismatchStreak = 0;
+  const readyMs = Math.max(0, parseFloat($("bal_readyTime").value) || 0) * 1000;
+  if (readyMs > 0) balStartCountdown(readyMs);
+  else balBeginCalibration();
+});
+
+// Get-ready countdown, same pattern as Sit-to-Stand's: gives whoever tapped
+// Start time to get set on the right leg before calibration snapshots a
+// baseline — previously calibration began the instant Start was tapped, with
+// almost no time to get positioned. Also announces which leg and eyes
+// condition out loud, and runs the wrong-leg check (below) the whole time,
+// so a mismatch gets caught before calibration ever starts.
+function balStartCountdown(readyMs) {
+  balPhase = "countdown";
+  balCountdownMs = readyMs;
+  balCountdownActive = true;
+  balCountdownStartT = performance.now();
+  balLastSpokenSecond = null;
+  $("bal_channelGrid").style.display = "none";
+  const leg = $("bal_leg").value;
+  const eyesCond = BAL_SEQUENCE[balTrialIdx];
+  const eyesLabel = eyesCond === "Eyes Closed" ? "eyes closed" : "eyes open";
+  balDiag("Trial " + (balTrialIdx + 1) + " (" + eyesCond + ") get-ready countdown started. readyMs=" + readyMs + " leg=" + leg);
+  balSpeak("Get ready. Balance on your " + leg + " leg, " + eyesLabel + ".");
+  balCountdownLoop();
+}
+function balCountdownLoop() {
+  if (!balCountdownActive) return;
+  const now = performance.now();
+  const elapsed = now - balCountdownStartT;
+  const remainMs = Math.max(0, balCountdownMs - elapsed);
+  const remainS = Math.ceil(remainMs / 1000);
+  const leg = $("bal_leg").value;
+  $("bal_bigPhase").textContent = "get ready — " + leg + " leg";
+  $("bal_timer").textContent = remainS + "s";
+  balCheckLegMatch(now); // warns early if the camera already sees the other leg planted
+
+  if (remainS <= 3 && remainS >= 1 && balLastSpokenSecond !== remainS) {
+    balLastSpokenSecond = remainS;
+    balSpeak(String(remainS));
+  }
+  if (remainMs <= 0) {
+    balCountdownActive = false;
+    $("bal_bigPhase").textContent = "go!";
+    balSpeak("Go!");
+    balBeginCalibration();
+    return;
+  }
+  requestAnimationFrame(balCountdownLoop);
+}
+function balBeginCalibration() {
   balPhase = "calibrating";
   balCalibStartT = performance.now();
   balCalibSamples = { wristDist: [], raisedAnkle: [], stanceAnkle: [] };
   balBaseline = { wristDist: null, raisedAnkle: null, stanceAnkle: null };
   balPrevStanceAnkle = null;
-  $("bal_startBtn").style.display = "none";
-  $("bal_stopBtn").style.display = "block";
+  balLegMismatchStreak = 0;
+  $("bal_bigPhase").textContent = "";
   $("bal_channelGrid").style.display = "grid";
   balResetChannels();
   $("bal_timer").textContent = "0.0s";
   $("bal_liveHint").textContent = "Hold your starting position — calibrating…";
   balDiag("Trial " + (balTrialIdx + 1) + " (" + BAL_SEQUENCE[balTrialIdx] + ") calibration started.");
-});
+}
 
-$("bal_stopBtn").addEventListener("click", () => balEndTrial("manual"));
+$("bal_stopBtn").addEventListener("click", () => {
+  if (balCountdownActive) {
+    balCountdownActive = false;
+    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+    balPhase = "idle";
+    $("bal_bigPhase").textContent = "";
+    $("bal_timer").textContent = "—";
+    $("bal_startBtn").style.display = "block";
+    $("bal_stopBtn").style.display = "none";
+    balDiag("Get-ready countdown cancelled by user.");
+    return;
+  }
+  balEndTrial("manual");
+});
 
 function balEndTrial(reason) {
   if (balPhase === "idle" || balPhase === "done") return;
@@ -7149,6 +7256,7 @@ function balEndTrial(reason) {
   balPhase = "done";
   $("bal_startBtn").style.display = "block";
   $("bal_stopBtn").style.display = "none";
+  $("bal_bigPhase").textContent = "";
   $("bal_timer").textContent = heldS.toFixed(1) + "s";
 
   const leg = $("bal_leg").value;
@@ -7165,7 +7273,7 @@ function balEndTrial(reason) {
   } else {
     balPhase = "idle";
     balUpdateHeader();
-    $("bal_liveHint").textContent = "Get into position, then tap Start the moment you lift your foot.";
+    $("bal_liveHint").textContent = "Tap Start Trial, then use the count-in to get into position.";
     $("bal_channelGrid").style.display = "none";
   }
 }
@@ -7186,6 +7294,42 @@ function balAngleAtVertex(A, B, C) {
   cos = Math.max(-1, Math.min(1, cos));
   return Math.acos(cos) * 180 / Math.PI;
 }
+// Returns "left" | "right" (the leg actually bearing weight, by comparing
+// both knees' straightness) or null if the pose isn't confident/clear enough
+// to call it — e.g. before the person has actually lifted a foot yet.
+function balDetectActualStanceLeg(lm) {
+  if (!lm) return null;
+  const lHip = lm[23], lKnee = lm[25], lAnkle = lm[27];
+  const rHip = lm[24], rKnee = lm[26], rAnkle = lm[28];
+  const visOk = [lHip, lKnee, lAnkle, rHip, rKnee, rAnkle].every(p => (p && (p.visibility ?? 1) > 0.4));
+  if (!visOk) return null;
+  const leftAngle = balAngleAtVertex(lHip, lKnee, lAnkle);
+  const rightAngle = balAngleAtVertex(rHip, rKnee, rAnkle);
+  if (leftAngle == null || rightAngle == null) return null;
+  const gap = leftAngle - rightAngle;
+  if (Math.abs(gap) < LEG_MISMATCH_ANGLE_GAP) return null; // both legs roughly equally straight/bent — not clearly in a single-leg stance yet
+  return gap > 0 ? "left" : "right"; // the straighter (larger-angle) knee is the one bearing weight
+}
+
+// Checks the latest tracked frame against the selected stance leg; speaks a
+// correction (debounced) once a mismatch has been confident for several
+// consecutive frames. Returns true while a confirmed mismatch is active, so
+// callers (e.g. calibration) can bail out rather than calibrate on the wrong
+// assumption.
+function balCheckLegMatch(nowT) {
+  const selected = $("bal_leg").value;
+  const detected = balDetectActualStanceLeg(balLastLm);
+  if (!detected || detected === selected) { balLegMismatchStreak = 0; return false; }
+  balLegMismatchStreak++;
+  if (balLegMismatchStreak < LEG_MISMATCH_STREAK_NEEDED) return false;
+  if (nowT - balLastLegVoiceT >= LEG_VOICE_COOLDOWN_MS) {
+    balLastLegVoiceT = nowT;
+    balSpeak("Wrong leg. Please balance on your " + selected + " leg.");
+    balDiag("Leg mismatch detected: selector says '" + selected + "', camera sees weight on the '" + detected + "' leg. Voice correction given.");
+  }
+  return true;
+}
+
 function balDrawAngleMark(A, B, C, angle) {
   const ax = A.x * balOverlay.width, ay = A.y * balOverlay.height;
   const bx = B.x * balOverlay.width, by = B.y * balOverlay.height;
@@ -7256,6 +7400,7 @@ function balLoop() {
   balCtx.clearRect(0, 0, balOverlay.width, balOverlay.height);
   balDrawFrameGuide();
   const lm = (poseResult.landmarks && poseResult.landmarks.length > 0) ? poseResult.landmarks[0] : null;
+  balLastLm = lm; // kept fresh every frame regardless of phase, so the get-ready countdown loop can read it too
 
   let faceScore = null;
   const wantFace = balPhase === "calibrating" || (balPhase === "active" && BAL_SEQUENCE[balTrialIdx] === "Eyes Closed");
@@ -7302,6 +7447,16 @@ function balLoop() {
   const wristDist = balDist(lw, rw);
 
   if (balPhase === "calibrating") {
+    if (balCheckLegMatch(now)) {
+      // Confirmed, sustained mismatch — don't calibrate a baseline built on
+      // the wrong leg's landmarks (this is what produced the long "tracking
+      // lost" spells and a near-instant false trigger in a real capture).
+      // Give them a fresh get-ready countdown instead of quietly failing.
+      balDiag("Calibration aborted — the camera kept seeing the other leg planted. Restarting the get-ready countdown.");
+      const retryMs = Math.max(3000, Math.max(0, parseFloat($("bal_readyTime").value) || 0) * 1000);
+      balStartCountdown(retryMs);
+      return;
+    }
     balCalibSamples.wristDist.push(wristDist);
     balCalibSamples.raisedAnkle.push({ x: raisedAnkle.x, y: raisedAnkle.y });
     balCalibSamples.stanceAnkle.push({ x: stanceAnkle.x, y: stanceAnkle.y });
@@ -7388,10 +7543,11 @@ function balShowResults() {
 $("bal_resetBtn").addEventListener("click", () => {
   balTrialIdx = 0; balTrials = []; balPhase = "idle";
   $("bal_resultsSec").style.display = "none";
+  $("bal_bigPhase").textContent = "";
   $("bal_timer").textContent = "—";
   $("bal_channelGrid").style.display = "none";
   balUpdateHeader();
-  $("bal_liveHint").textContent = "Get into position, then tap Start the moment you lift your foot.";
+  $("bal_liveHint").textContent = "Tap Start Trial, then use the count-in to get into position.";
   balRenderLog();
   balDiag("Reset for a new set of 6.");
 });
