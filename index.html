@@ -2069,7 +2069,9 @@ body.lightpanel { background: #ffffff; }
     </table>
   </div>
   <button id="sts_exportBtn" class="btn-secondary" style="margin-top:10px;">Export CSV</button>
+  <button id="sts_exportTraceBtn" class="btn-secondary">Export raw trace (last trial)</button>
   <button id="sts_exportDiagBtn" class="btn-secondary">Export diagnostics log</button>
+  <p class="hint">The raw trace is a frame-by-frame log of hip height, detector state, and every auto/manual rep event for whichever trial ran most recently — this is what a calibration pass actually needs (the summary CSV above only has the final count). Export it right after a trial, before starting the next one.</p>
 </section>
 
 <section>
@@ -7147,6 +7149,52 @@ function balEndTrial(reason) {
 
 function balDist(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
 
+// ---- Angle mark (visual only — not used for any trial-end detection).
+// Shows the raised leg's knee angle (hip–knee–ankle), same 3-point geometry
+// as the Range of Motion tool's joint highlight, but drawn in blue here so
+// it reads as a reference/context mark rather than ROM's own measurement. ----
+function balAngleAtVertex(A, B, C) {
+  if (!A || !B || !C) return null;
+  const v1 = { x: A.x - B.x, y: A.y - B.y };
+  const v2 = { x: C.x - B.x, y: C.y - B.y };
+  const mag1 = Math.hypot(v1.x, v1.y), mag2 = Math.hypot(v2.x, v2.y);
+  if (mag1 === 0 || mag2 === 0) return null;
+  let cos = (v1.x * v2.x + v1.y * v2.y) / (mag1 * mag2);
+  cos = Math.max(-1, Math.min(1, cos));
+  return Math.acos(cos) * 180 / Math.PI;
+}
+function balDrawAngleMark(A, B, C, angle) {
+  const ax = A.x * balOverlay.width, ay = A.y * balOverlay.height;
+  const bx = B.x * balOverlay.width, by = B.y * balOverlay.height;
+  const cx = C.x * balOverlay.width, cy = C.y * balOverlay.height;
+  balCtx.lineJoin = "round";
+  balCtx.lineCap = "round";
+  balCtx.strokeStyle = "rgba(0,0,0,0.65)";
+  balCtx.lineWidth = 10;
+  balCtx.beginPath();
+  balCtx.moveTo(ax, ay); balCtx.lineTo(bx, by); balCtx.lineTo(cx, cy);
+  balCtx.stroke();
+  balCtx.strokeStyle = "#2f86eb";
+  balCtx.lineWidth = 6;
+  balCtx.beginPath();
+  balCtx.moveTo(ax, ay); balCtx.lineTo(bx, by); balCtx.lineTo(cx, cy);
+  balCtx.stroke();
+  balCtx.fillStyle = "#2f86eb";
+  balCtx.strokeStyle = "rgba(0,0,0,0.65)";
+  balCtx.lineWidth = 2;
+  balCtx.beginPath();
+  balCtx.arc(bx, by, 7, 0, 2 * Math.PI);
+  balCtx.fill();
+  balCtx.stroke();
+  const label = angle.toFixed(0) + "°";
+  balCtx.font = "bold 16px sans-serif";
+  balCtx.lineWidth = 4;
+  balCtx.strokeStyle = "rgba(0,0,0,0.7)";
+  balCtx.strokeText(label, bx + 12, by - 12);
+  balCtx.fillStyle = "#fff";
+  balCtx.fillText(label, bx + 12, by - 12);
+}
+
 function balLoop() {
   requestAnimationFrame(balLoop);
   if (!balPoseLandmarker || balVideo.readyState < 2) return;
@@ -7184,6 +7232,14 @@ function balLoop() {
     balCtx.arc(p.x * balOverlay.width, p.y * balOverlay.height, 6, 0, 2 * Math.PI);
     balCtx.fill();
   });
+
+  const raisedSide = leg === "right" ? "left" : "right";
+  const raisedHip = lm[raisedSide === "right" ? 24 : 23];
+  const raisedKnee = lm[raisedSide === "right" ? 26 : 25];
+  if (raisedHip && raisedKnee && (raisedHip.visibility ?? 1) > 0.4 && (raisedKnee.visibility ?? 1) > 0.4) {
+    const kneeAngle = balAngleAtVertex(raisedHip, raisedKnee, raisedAnkle);
+    if (kneeAngle != null) balDrawAngleMark(raisedHip, raisedKnee, raisedAnkle, kneeAngle);
+  }
 
   if (!visOk) {
     if (balPhase === "active" || balPhase === "calibrating") balDiag("Tracking lost (low landmark visibility) during " + balPhase + ".");
@@ -7437,6 +7493,55 @@ let stsLastFrameT = null;
 let stsRollingBuf = []; // {t, y}
 let stsRepState = "sitting"; // sitting | standing
 let stsTrials = [];
+let stsTraceLog = []; // {t_ms, y, state, event} — frame-by-frame log for the trial in progress
+let stsLastTrace = []; // snapshot of stsTraceLog from the most recently finished trial, for export
+
+// ---- Angle mark (visual only — not used for rep detection, which is driven
+// entirely by hip height above). Shows knee angle (hip–knee–ankle) on
+// whichever side is better tracked, same 3-point geometry as the Range of
+// Motion tool's joint highlight, drawn in blue as a reference/context mark
+// alongside the hip-height line that actually drives the count. ----
+function stsAngleAtVertex(A, B, C) {
+  if (!A || !B || !C) return null;
+  const v1 = { x: A.x - B.x, y: A.y - B.y };
+  const v2 = { x: C.x - B.x, y: C.y - B.y };
+  const mag1 = Math.hypot(v1.x, v1.y), mag2 = Math.hypot(v2.x, v2.y);
+  if (mag1 === 0 || mag2 === 0) return null;
+  let cos = (v1.x * v2.x + v1.y * v2.y) / (mag1 * mag2);
+  cos = Math.max(-1, Math.min(1, cos));
+  return Math.acos(cos) * 180 / Math.PI;
+}
+function stsDrawAngleMark(A, B, C, angle) {
+  const ax = A.x * stsOverlay.width, ay = A.y * stsOverlay.height;
+  const bx = B.x * stsOverlay.width, by = B.y * stsOverlay.height;
+  const cx = C.x * stsOverlay.width, cy = C.y * stsOverlay.height;
+  stsCtx.lineJoin = "round";
+  stsCtx.lineCap = "round";
+  stsCtx.strokeStyle = "rgba(0,0,0,0.65)";
+  stsCtx.lineWidth = 10;
+  stsCtx.beginPath();
+  stsCtx.moveTo(ax, ay); stsCtx.lineTo(bx, by); stsCtx.lineTo(cx, cy);
+  stsCtx.stroke();
+  stsCtx.strokeStyle = "#2f86eb";
+  stsCtx.lineWidth = 6;
+  stsCtx.beginPath();
+  stsCtx.moveTo(ax, ay); stsCtx.lineTo(bx, by); stsCtx.lineTo(cx, cy);
+  stsCtx.stroke();
+  stsCtx.fillStyle = "#2f86eb";
+  stsCtx.strokeStyle = "rgba(0,0,0,0.65)";
+  stsCtx.lineWidth = 2;
+  stsCtx.beginPath();
+  stsCtx.arc(bx, by, 7, 0, 2 * Math.PI);
+  stsCtx.fill();
+  stsCtx.stroke();
+  const label = angle.toFixed(0) + "°";
+  stsCtx.font = "bold 16px sans-serif";
+  stsCtx.lineWidth = 4;
+  stsCtx.strokeStyle = "rgba(0,0,0,0.7)";
+  stsCtx.strokeText(label, bx + 12, by - 12);
+  stsCtx.fillStyle = "#fff";
+  stsCtx.fillText(label, bx + 12, by - 12);
+}
 
 function stsPreviewLoop() {
   requestAnimationFrame(stsPreviewLoop);
@@ -7464,9 +7569,33 @@ function stsPreviewLoop() {
       stsCtx.arc(((lh.x + rh.x) / 2) * stsOverlay.width, px, 6, 0, 2 * Math.PI);
       stsCtx.fill();
     }
+
+    const lKnee = lm[25], lAnkle = lm[27], rKnee = lm[26], rAnkle = lm[28];
+    const leftVis = ((lh.visibility ?? 1) + (lKnee.visibility ?? 1) + (lAnkle.visibility ?? 1)) / 3;
+    const rightVis = ((rh.visibility ?? 1) + (rKnee.visibility ?? 1) + (rAnkle.visibility ?? 1)) / 3;
+    const useRight = rightVis >= leftVis;
+    const hip = useRight ? rh : lh, knee = useRight ? rKnee : lKnee, ankle = useRight ? rAnkle : lAnkle;
+    if ((useRight ? rightVis : leftVis) > 0.4) {
+      const kneeAngle = stsAngleAtVertex(hip, knee, ankle);
+      if (kneeAngle != null) stsDrawAngleMark(hip, knee, ankle, kneeAngle);
+    }
   }
 
-  if (stsTestRunning) stsProcessRepFrame(now, hipY);
+  if (stsTestRunning) {
+    const frameInfo = stsProcessRepFrame(now, hipY);
+    // Raw trace: one row per frame, plus range/threshold context, so a
+    // calibration pass can see exactly why a rep did or didn't fire, not
+    // just the final count. See stsLastTrace / "Export raw trace" below.
+    stsTraceLog.push({
+      t: Math.round(now - stsStartT),
+      y: hipY == null ? "" : hipY.toFixed(4),
+      state: stsRepState,
+      range: frameInfo.range == null ? "" : frameInfo.range.toFixed(4),
+      standThresh: frameInfo.standThresh == null ? "" : frameInfo.standThresh.toFixed(4),
+      sitThresh: frameInfo.sitThresh == null ? "" : frameInfo.sitThresh.toFixed(4),
+      event: frameInfo.rep ? "auto_rep" : ""
+    });
+  }
 }
 
 function stsProcessRepFrame(now, hipY) {
@@ -7476,42 +7605,46 @@ function stsProcessRepFrame(now, hipY) {
   if (hipY == null) {
     stsTrackingLostMs += dt;
     $("sts_trackHint").textContent = "Tracking lost — step back into frame.";
-    return;
+    return { rep: false, range: null, standThresh: null, sitThresh: null };
   }
   $("sts_trackHint").textContent = "";
 
   stsRollingBuf.push({ t: now, y: hipY });
   while (stsRollingBuf.length && now - stsRollingBuf[0].t > 5000) stsRollingBuf.shift();
-  if (stsRollingBuf.length < 5) return;
+  if (stsRollingBuf.length < 5) return { rep: false, range: null, standThresh: null, sitThresh: null };
 
   const ys = stsRollingBuf.map(s => s.y);
   const minY = Math.min(...ys), maxY = Math.max(...ys);
   const range = maxY - minY;
-  if (range < STS_MIN_RANGE) return;
+  if (range < STS_MIN_RANGE) return { rep: false, range, standThresh: null, sitThresh: null };
 
   const standThresh = minY + range * 0.35;
   const sitThresh = minY + range * 0.65;
+  let rep = false;
 
   if (stsRepState === "sitting" && hipY < standThresh) {
     stsRepState = "standing";
   } else if (stsRepState === "standing" && hipY > sitThresh) {
     stsRepState = "sitting";
     stsRepCount++;
+    rep = true;
     $("sts_repCount").innerHTML = stsRepCount + ' <span class="unit">reps</span>';
     stsDiag("Rep detected. count=" + stsRepCount + " hipY=" + hipY.toFixed(3) + " range=" + range.toFixed(3));
   }
+  return { rep, range, standThresh, sitThresh };
 }
 
 $("sts_startBtn").addEventListener("click", () => {
   stsRepCount = 0; stsEndedEarly = false; stsManuallyCorrected = false;
   stsTrackingLostMs = 0; stsRollingBuf = []; stsRepState = "sitting"; stsLastFrameT = null;
+  stsTraceLog = [];
   $("sts_repCount").innerHTML = '0 <span class="unit">reps</span>';
   $("sts_startBtn").style.display = "none";
   $("sts_stopBtn").style.display = "block";
   $("sts_resultsSec").style.display = "none";
   stsTestRunning = true;
   stsStartT = performance.now();
-  stsDiag("Test started.");
+  stsDiag("Test started. config: STS_MIN_RANGE=" + STS_MIN_RANGE + " standThreshFrac=0.35 sitThreshFrac=0.65 rollingWindowMs=5000");
   stsTick();
 });
 
@@ -7519,11 +7652,13 @@ $("sts_minusBtn").addEventListener("click", () => {
   stsRepCount = Math.max(0, stsRepCount - 1);
   stsManuallyCorrected = true;
   $("sts_repCount").innerHTML = stsRepCount + ' <span class="unit">reps</span>';
+  stsTraceLog.push({ t: Math.round(performance.now() - stsStartT), y: "", state: stsRepState, range: "", standThresh: "", sitThresh: "", event: "manual_minus" });
 });
 $("sts_plusBtn").addEventListener("click", () => {
   stsRepCount++;
   stsManuallyCorrected = true;
   $("sts_repCount").innerHTML = stsRepCount + ' <span class="unit">reps</span>';
+  stsTraceLog.push({ t: Math.round(performance.now() - stsStartT), y: "", state: stsRepState, range: "", standThresh: "", sitThresh: "", event: "manual_plus" });
 });
 
 $("sts_stopBtn").addEventListener("click", () => { stsEndedEarly = true; stsFinish(); });
@@ -7549,6 +7684,8 @@ function stsFinish() {
   $("sts_resPace").textContent = pace != null ? pace.toFixed(1) + "/30s" : "—";
   stsDiag("Test finished. reps=" + stsRepCount + " actualDurS=" + actualDurS.toFixed(1) + " endedEarly=" + stsEndedEarly + " manuallyCorrected=" + stsManuallyCorrected + " trackingLostS=" + (stsTrackingLostMs / 1000).toFixed(1));
   stsTrials.push({ reps: stsRepCount, actualDurS, endedEarly: stsEndedEarly, manuallyCorrected: stsManuallyCorrected, trackingLostS: stsTrackingLostMs / 1000, notes: "" });
+  stsLastTrace = stsTraceLog.slice();
+  stsDiag("Raw trace captured for this trial. samples=" + stsLastTrace.length);
   stsRenderLog();
 }
 
@@ -7589,6 +7726,19 @@ $("sts_exportBtn").addEventListener("click", () => {
   a.download = `sit-to-stand-web-spike-results-v${APP_VERSION}-${PLATFORM}-${Date.now()}.csv`;
   a.click();
   stsDiag("CSV exported. trials=" + stsTrials.length);
+});
+
+$("sts_exportTraceBtn").addEventListener("click", () => {
+  if (!stsLastTrace.length) { alert("No trial trace yet — run a test first."); return; }
+  const header = ["t_ms","hip_y","rep_state","range","stand_thresh","sit_thresh","event"];
+  const rows = stsLastTrace.map(s => [s.t, s.y, s.state, s.range, s.standThresh, s.sitThresh, s.event].join(","));
+  const csv = [header.join(","), ...rows].join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `sit-to-stand-raw-trace-v${APP_VERSION}-${PLATFORM}-${Date.now()}.csv`;
+  a.click();
+  stsDiag("Raw trace CSV exported. samples=" + stsLastTrace.length);
 });
 
 </script>
