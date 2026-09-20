@@ -73,9 +73,18 @@ body { margin: 0;
     color: var(--ink);
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     padding: 12px 12px calc(24px + env(safe-area-inset-bottom, 0px));
-    padding-top: calc(12px + env(safe-area-inset-top, 0px));
+    padding-top: calc(34px + env(safe-area-inset-top, 0px));
     transition: background 0.2s; }
 body.lightpanel { background: #ffffff; }
+#buildBanner {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 9999;
+  background: #111; padding-top: env(safe-area-inset-top, 0px);
+}
+#buildBanner .inner {
+  padding: 4px 8px; text-align: center;
+  font: 600 10.5px/1.3 ui-monospace, 'SF Mono', Menlo, monospace;
+  color: #9fe0a8; letter-spacing: .01em;
+}
 .panel-gait h1 { font-size: 1.15rem; margin: 0 0 4px; }
 .panel-gait .sub { color: var(--muted); font-size: 0.85rem; margin: 0 0 16px; line-height: 1.4; }
 .panel-gait section { background: #fff;
@@ -924,6 +933,8 @@ body.lightpanel { background: #ffffff; }
 </style>
 </head>
 <body>
+
+<div id="buildBanner"><div class="inner">Build 9 &middot; 2026-09-20 &middot; Balance: camera-facing ground-truth logging + wrong-leg voice fix</div></div>
 
 <div class="page home-wrap" data-page="home">
 
@@ -2005,6 +2016,7 @@ body.lightpanel { background: #ffffff; }
     </table>
   </div>
   <button id="bal_exportBtn" class="btn-secondary" style="margin-top:10px;">Export CSV</button>
+  <button id="bal_exportTraceBtn" class="btn-secondary">Export raw trace (last trial)</button>
   <button id="bal_exportDiagBtn" class="btn-secondary">Export diagnostics log</button>
 </section>
 
@@ -7025,7 +7037,15 @@ async function balOpenCamera() {
   balVideo.srcObject = balStream;
   await balVideo.play();
   balResizeOverlay();
-  balDiag("Camera opened. facingMode=" + balFacing);
+  // Log what the BROWSER actually granted, not just what we asked for —
+  // "ideal" is a preference, not a guarantee, and this is the only way to
+  // confirm which physical camera is really live when a real capture's
+  // account of which camera was used doesn't match what we requested.
+  const track = balStream.getVideoTracks()[0];
+  const settings = (track && track.getSettings) ? track.getSettings() : {};
+  balDiag("Camera opened. requested facingMode=" + balFacing +
+    " | actual facingMode=" + (settings.facingMode || "not reported by this browser") +
+    " | device label=" + (track && track.label ? track.label : "not available"));
 }
 function balResizeOverlay() {
   balOverlay.width = balVideo.videoWidth || balVideo.clientWidth;
@@ -7088,6 +7108,12 @@ function balUpdateCamButtons() {
   $("bal_camBackBtn").className = balFacing === "environment" ? "btn-primary" : "btn-secondary";
 }
 async function balSetFacing(facing) {
+  // Logged unconditionally, even on a no-op tap, so a real-capture round can
+  // show definitively whether a camera button press was registered at all
+  // and when, relative to "Start Camera" — the only way to settle a case
+  // where the diagnostics' requested facingMode doesn't match what the
+  // person remembers picking.
+  balDiag("Camera facing button tapped: " + facing + " (current=" + balFacing + ")");
   if (balFacing === facing) return;
   balFacing = facing;
   balUpdateCamButtons();
@@ -7123,6 +7149,13 @@ let balCalibSamples = { wristDist: [], raisedAnkle: [], stanceAnkle: [] };
 let balBaseline = { wristDist: null, raisedAnkle: null, stanceAnkle: null };
 let balPrevStanceAnkle = null;
 let balTrials = []; // { idx, eyes, leg, heldS, heldFull45, endedBy, notes }
+
+// ---- Raw per-frame trace, active phase only — same purpose as Sit-to-
+// Stand's trace export: the trial log alone can't show WHY a channel
+// triggered as early as it did, only that it did. One row per frame with
+// every channel's live value, kept for the most recently finished trial. ----
+let balTraceLog = [];
+let balLastTrace = [];
 
 // ---- Get-ready countdown (same pattern as Sit-to-Stand's) — gives the
 // person time to walk back into position and get up on the right leg after
@@ -7227,6 +7260,7 @@ function balBeginCalibration() {
   balBaseline = { wristDist: null, raisedAnkle: null, stanceAnkle: null };
   balPrevStanceAnkle = null;
   balLegMismatchStreak = 0;
+  balTraceLog = [];
   $("bal_bigPhase").textContent = "";
   $("bal_channelGrid").style.display = "grid";
   balResetChannels();
@@ -7253,6 +7287,7 @@ $("bal_stopBtn").addEventListener("click", () => {
 function balEndTrial(reason) {
   if (balPhase === "idle" || balPhase === "done") return;
   const heldS = balPhase === "active" ? (performance.now() - balActiveStartT) / 1000 : 0;
+  balLastTrace = balTraceLog.slice();
   balPhase = "done";
   $("bal_startBtn").style.display = "block";
   $("bal_stopBtn").style.display = "none";
@@ -7519,11 +7554,35 @@ function balLoop() {
     balSetChannel("Eyes", "n/a", false);
   }
 
-  if (elapsedS >= BAL_TRIAL_CAP_S) balEndTrial("timeout");
-  else if (armsTriggered) balEndTrial("arms");
-  else if (footTriggered) balEndTrial("foot");
-  else if (stanceTriggered) balEndTrial("stance");
-  else if (eyesTriggered) balEndTrial("eyes");
+  let triggerEvent = "";
+  if (elapsedS >= BAL_TRIAL_CAP_S) triggerEvent = "trigger:timeout";
+  else if (armsTriggered) triggerEvent = "trigger:arms";
+  else if (footTriggered) triggerEvent = "trigger:foot";
+  else if (stanceTriggered) triggerEvent = "trigger:stance";
+  else if (eyesTriggered) triggerEvent = "trigger:eyes";
+
+  balTraceLog.push({
+    t: Math.round(now - balActiveStartT),
+    armsRatio: armsRatio.toFixed(4), footDrift: footDrift.toFixed(4),
+    stanceJump: stanceJump.toFixed(4), stanceDrift: stanceDrift.toFixed(4),
+    eyeScore: faceScore != null ? faceScore.toFixed(3) : "",
+    event: triggerEvent
+  });
+
+  if (triggerEvent === "trigger:timeout") balEndTrial("timeout");
+  else if (triggerEvent === "trigger:arms") {
+    balDiag("Trial ended by ARMS. armsRatio=" + armsRatio.toFixed(3) + " (threshold=" + ARMS_UNCROSS_RATIO + ") at t=" + elapsedS.toFixed(2) + "s");
+    balEndTrial("arms");
+  } else if (triggerEvent === "trigger:foot") {
+    balDiag("Trial ended by FOOT. footDrift=" + footDrift.toFixed(4) + " (threshold=" + FOOT_MOVE_THRESH + ") at t=" + elapsedS.toFixed(2) + "s");
+    balEndTrial("foot");
+  } else if (triggerEvent === "trigger:stance") {
+    balDiag("Trial ended by STANCE. stanceJump=" + stanceJump.toFixed(4) + " (threshold=" + STANCE_JUMP_THRESH + ") stanceDrift=" + stanceDrift.toFixed(4) + " (threshold=" + STANCE_DRIFT_THRESH + ") at t=" + elapsedS.toFixed(2) + "s");
+    balEndTrial("stance");
+  } else if (triggerEvent === "trigger:eyes") {
+    balDiag("Trial ended by EYES. eyeScore=" + (faceScore != null ? faceScore.toFixed(3) : "n/a") + " (open-trigger=" + EYE_OPEN_TRIGGER + ") at t=" + elapsedS.toFixed(2) + "s");
+    balEndTrial("eyes");
+  }
 }
 
 function balFmt(v, d = 1) { return v == null ? "—" : v.toFixed(d) + "s"; }
@@ -7581,6 +7640,19 @@ $("bal_exportBtn").addEventListener("click", () => {
   a.download = `single-leg-balance-web-spike-results-v${APP_VERSION}-${PLATFORM}-${Date.now()}.csv`;
   a.click();
   balDiag("CSV exported. trials=" + balTrials.length);
+});
+
+$("bal_exportTraceBtn").addEventListener("click", () => {
+  if (!balLastTrace.length) { alert("No trace captured yet — finish a trial first."); return; }
+  const header = ["t_ms", "arms_ratio", "foot_drift", "stance_jump", "stance_drift", "eye_score", "event"];
+  const rows = balLastTrace.map(r => [r.t, r.armsRatio, r.footDrift, r.stanceJump, r.stanceDrift, r.eyeScore, r.event].join(","));
+  const csv = [header.join(","), ...rows].join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `single-leg-balance-raw-trace-v${APP_VERSION}-${PLATFORM}-${Date.now()}.csv`;
+  a.click();
+  balDiag("Raw trace exported. samples=" + balLastTrace.length);
 });
 
 </script>
@@ -7653,7 +7725,15 @@ async function stsOpenCamera() {
   stsVideo.srcObject = stsStream;
   await stsVideo.play();
   stsResizeOverlay();
-  stsDiag("Camera opened. facingMode=" + stsFacing);
+  // Log what the BROWSER actually granted, not just what we asked for —
+  // "ideal" is a preference, not a guarantee, and this is the only way to
+  // confirm which physical camera is really live if a real capture's account
+  // of which camera was used ever doesn't match what was requested.
+  const track = stsStream.getVideoTracks()[0];
+  const settings = (track && track.getSettings) ? track.getSettings() : {};
+  stsDiag("Camera opened. requested facingMode=" + stsFacing +
+    " | actual facingMode=" + (settings.facingMode || "not reported by this browser") +
+    " | device label=" + (track && track.label ? track.label : "not available"));
 }
 function stsResizeOverlay() {
   stsOverlay.width = stsVideo.videoWidth || stsVideo.clientWidth;
@@ -7730,6 +7810,7 @@ function stsUpdateCamButtons() {
   $("sts_camBackBtn").className = stsFacing === "environment" ? "btn-primary" : "btn-secondary";
 }
 async function stsSetFacing(facing) {
+  stsDiag("Camera facing button tapped: " + facing + " (current=" + stsFacing + ")");
   if (stsFacing === facing) return;
   stsFacing = facing;
   stsUpdateCamButtons();
