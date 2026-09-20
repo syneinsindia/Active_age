@@ -7524,13 +7524,19 @@ async function stsInitPose() {
 
 $("sts_startCamBtn").addEventListener("click", async () => {
   $("sts_videoWrap").style.display = "block";
+  // Request the wake lock FIRST, before any awaited camera/model setup. iOS
+  // Safari only honors navigator.wakeLock.request() while it's still inside
+  // the click's brief "user activation" window — seen directly on iPhone:
+  // camera+model setup took ~10s, and by the time the lock was requested
+  // afterward, iOS had already expired activation and rejected it with
+  // NotAllowedError (Android Chrome is more lenient and doesn't need this).
+  stsRequestWakeLock();
   try {
     await stsOpenCamera();
     $("sts_camPill").innerHTML = '<span class="pill ok">live</span>';
     if (!stsPoseLandmarker) await stsInitPose();
     $("sts_startBtn").disabled = false;
     stsPreviewLoop();
-    stsRequestWakeLock();
   } catch (err) {
     $("sts_camPill").innerHTML = '<span class="pill bad">denied/error</span>';
     stsDiag("CAMERA/MODEL ERROR: " + (err.name || "") + " " + (err.message || err));
