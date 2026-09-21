@@ -951,7 +951,7 @@ body.lightpanel { background: #ffffff; }
 </head>
 <body>
 
-<div id="buildBanner"><div class="inner" title="Build 23 · 2026-09-21 · Chest Breathing Scan: Round 7's new diagnostics explained the front camera's persistent no-lock — close-up framing puts shoulder width at ~0.75-0.79 of frame, past the old implausible-distance cap, and the chest box math wants ~1.65x the frame's width at that scale. Raised the plausible-distance cap to 0.90 and the box now scales itself down to fit the frame instead of relying on clip tolerance to rescue an oversized box">Build 23 &middot; 2026-09-21 &middot; Breathing Scan: fixed the front camera's box-too-big-for-frame bug found in Round 7's diagnostics</div></div>
+<div id="buildBanner"><div class="inner" title="Build 24 · 2026-09-21 · Chest Breathing Scan: Build 23's box-fit fix capped the box against the RAW frame, but too_clipped is judged in DISPLAY space, and this device's preview only shows the center ~56% of the raw frame's width — so the cap was still ~1.8x too generous and Round 8 showed the front camera stuck at fallback again. Now scales the box against its actual on-screen (display-space) size instead">Build 24 &middot; 2026-09-21 &middot; Breathing Scan: corrected the box-fit fix — it was sized against the raw frame instead of what's actually visible on screen</div></div>
 
 <div class="page home-wrap" data-page="home">
 
@@ -6580,7 +6580,7 @@ const roiCanvas = $("b_roiCanvas");
 const roiCtx = roiCanvas.getContext("2d", { willReadFrequently: true });
 const roiGuideEl = document.querySelector(".panel-breath .roi-guide");
 
-const APP_VERSION = "1.9.0";
+const APP_VERSION = "1.10.0";
 const PLATFORM = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream ? "iOS"
   : /Android/.test(navigator.userAgent) ? "Android" : "Desktop";
 $("b_verPill").textContent = "v" + APP_VERSION + " · " + PLATFORM;
@@ -6907,7 +6907,24 @@ const CHEST_BOX_MAX_CLIP_FRACTION = 0.35; // up to 35% of the natural box's area
 // immediately and stayed locked — the framing-guide bug wasn't just a visual
 // annoyance, it was also feeding the respiratory-rate extraction a
 // motion-dominated signal on the front camera.
-const CHEST_BOX_MAX_FRAME_FRACTION = 0.92; // box is scaled down (preserving aspect, staying centered) before its width would exceed this fraction of the raw frame
+//
+// Round 8 (Build 24): that fix didn't hold — front camera stayed on the
+// fallback box the entire trial, clipFraction still 0.39-1.00 throughout, and
+// this time barely any implausible_shoulder_distance rejections at all (the
+// 0.90 cap did its job), so the box was passing the geometry check and still
+// getting clipped. The bug was in how CHEST_BOX_MAX_FRAME_FRACTION got
+// applied: it capped the box's size in RAW-frame fractions, but "too_clipped"
+// is judged in DISPLAY space, and Round 5's own coordinate-mapping fix
+// established that those two spaces aren't 1:1 — on this device the display
+// only shows the center ~56% of the raw frame's width (object-fit:cover), so
+// a raw-space width maps to a display-space width nearly 1.8x larger
+// (rawToDisplayScale() below; videoAr/VIDEO_WRAP_ASPECT = 1.333/0.75). A box
+// capped at 92% of the RAW width was therefore still ~164% of the DISPLAY
+// width — comfortably guaranteed to clip no matter how it's centered. Fixed
+// by scaling the box using its actual DISPLAY-space size (raw size x the
+// per-axis crop factor), the same crop-aware relationship Round 5 already
+// established for position, just applied to size too.
+const CHEST_BOX_MAX_FRAME_FRACTION = 0.92; // box is scaled down (preserving aspect, staying centered) before its DISPLAY-space width or height would exceed this fraction of the visible preview
 // Fallback ROI used only if no confident chest box is available the instant
 // "Capture" is pressed (e.g. a brief tracking dropout) — the old fixed box,
 // kept as a safety net rather than blocking capture outright.
@@ -6985,6 +7002,21 @@ function rawToDisplayFraction(video, rawX, rawY) {
   return { x: rawX, y: rawY };
 }
 
+// A raw-space size delta maps to display space by the same per-axis factor
+// regardless of position (the crop offset cancels out of a delta) — this
+// returns that factor for each axis, so box-fit logic can reason in display
+// terms without projecting full corner coordinates. On this device
+// (videoAr=1.333 > VIDEO_WRAP_ASPECT=0.75, i.e. the horizontal-crop branch
+// above), sx works out to ~1.78: a raw-space width is stretched nearly 2x
+// once mapped onto the visible ~56%-wide strip of the preview.
+function rawToDisplayScale(video) {
+  const vw = video.videoWidth || 480, vh = video.videoHeight || 640;
+  const videoAr = vw / vh;
+  if (videoAr > VIDEO_WRAP_ASPECT) return { sx: videoAr / VIDEO_WRAP_ASPECT, sy: 1 };
+  if (videoAr < VIDEO_WRAP_ASPECT) return { sx: 1, sy: VIDEO_WRAP_ASPECT / videoAr };
+  return { sx: 1, sy: 1 };
+}
+
 // Computes the chest box from the two shoulder landmarks. Always returns an
 // object with `ok` (true only when the box is confident, plausible, and not
 // too clipped) and `reason` (why not, when ok is false) — Round 6 found a
@@ -7017,14 +7049,23 @@ function computeChestBox(lm, video) {
   let w = shoulderW * CHEST_BOX_WIDTH_MULT;
   let h = shoulderW * CHEST_BOX_HEIGHT_MULT;
   // Close-up framing (typical on the front camera, held at arm's length) can
-  // put shoulderW high enough that this box wants more width than the raw
-  // frame has at all — see the Round 7/Build 23 note above. Scale both
-  // dimensions down together so the box still fits, rather than leaving it
-  // oversized and relying on the clip-fraction tolerance to rescue it.
-  if (w > CHEST_BOX_MAX_FRAME_FRACTION) {
-    const scale = CHEST_BOX_MAX_FRAME_FRACTION / w;
-    w *= scale;
-    h *= scale;
+  // put shoulderW high enough that this box wants more room than the visible
+  // preview has at all — see the Round 7/Build 23 and Round 8/Build 24 notes
+  // above. Judge "too big" in DISPLAY space (what the person can actually
+  // see), not raw-frame space, since the two differ by the crop factor on
+  // this device (~1.78x on the width). Scale both dimensions down together,
+  // by whichever axis overshoots more, so the box still fits and keeps its
+  // aspect ratio, rather than leaving it oversized and relying on the
+  // clip-fraction tolerance to rescue it.
+  const cropScale = rawToDisplayScale(video);
+  const displayOvershoot = Math.max(
+    (w * cropScale.sx) / CHEST_BOX_MAX_FRAME_FRACTION,
+    (h * cropScale.sy) / CHEST_BOX_MAX_FRAME_FRACTION,
+    1
+  );
+  if (displayOvershoot > 1) {
+    w /= displayOvershoot;
+    h /= displayOvershoot;
   }
   const x = midX - w / 2;
   const y = midY + shoulderW * CHEST_BOX_TOP_MARGIN_MULT;
