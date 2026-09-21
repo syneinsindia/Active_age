@@ -951,7 +951,7 @@ body.lightpanel { background: #ffffff; }
 </head>
 <body>
 
-<div id="buildBanner"><div class="inner" title="Build 24 · 2026-09-21 · Chest Breathing Scan: Build 23's box-fit fix capped the box against the RAW frame, but too_clipped is judged in DISPLAY space, and this device's preview only shows the center ~56% of the raw frame's width — so the cap was still ~1.8x too generous and Round 8 showed the front camera stuck at fallback again. Now scales the box against its actual on-screen (display-space) size instead">Build 24 &middot; 2026-09-21 &middot; Breathing Scan: corrected the box-fit fix — it was sized against the raw frame instead of what's actually visible on screen</div></div>
+<div id="buildBanner"><div class="inner" title="Build 25 · 2026-09-21 · Workspace consolidation: verified (script-diff, ID-prefix-stripped, byte-identical) and deleted the last 8 stale standalone spike files — recovery-check, submaximal-fitness, walk-endurance, heart-breath-signal, heart-rate-sqi-fft, lung-capacity, rom, and track1-gait-speed — that had been sitting alongside their already-merged panels here since before this file existed. Every one of the 14 tests now lives only in index.html; no code in any panel changed">Build 25 &middot; 2026-09-21 &middot; Workspace consolidation: deleted the last 8 stale standalone spike files — every test now lives only in this one file</div></div>
 
 <div class="page home-wrap" data-page="home">
 
