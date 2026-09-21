@@ -934,7 +934,7 @@ body.lightpanel { background: #ffffff; }
 </head>
 <body>
 
-<div id="buildBanner"><div class="inner">Build 11 &middot; 2026-09-21 &middot; Balance: steadier calibration, wrong-leg check runs during the hold too</div></div>
+<div id="buildBanner"><div class="inner">Build 12 &middot; 2026-09-21 &middot; Balance: settle phase before calibration, reacquire grace mid-hold</div></div>
 
 <div class="page home-wrap" data-page="home">
 
@@ -7137,7 +7137,9 @@ const CALIB_MS = 1200;
 const CALIB_MIN_SAMPLES = 10;     // minimum frames within the contiguous run below before a baseline is trusted
 const CALIB_MAX_WAIT_MS = 12000;  // give up and ask the person to reposition rather than looping silently for a minute+
 const CALIB_LOST_LOG_THROTTLE_MS = 1000; // "tracking lost" is logged at most this often, not once per frame
-const MOVEMENT_GRACE_MS = 400;    // brief settle window right after calibration ends, before arms/foot/stance can trigger — absorbs the single-frame jitter of the calibrating→active transition
+const SETTLE_MS = 1800;           // time to actually find balance on one leg after "Go!", BEFORE calibration snapshots a baseline — a real capture showed 5 of 6 trials ending within ~0.4-2s, almost all right at the old post-calibration grace boundary, because calibration was capturing the still-wobbling first instant of the stance, not a settled one
+const MOVEMENT_GRACE_MS = 700;    // brief settle window right after calibration ends, before arms/foot/stance can trigger — absorbs the single-frame jitter of the calibrating→active transition (secondary to SETTLE_MS above, which does most of the real work now)
+const REACQUIRE_GRACE_MS = 600;   // after tracking drops out and comes back mid-hold, give the first frames a moment before movement channels can trigger — a real capture showed a trial ending right after exactly this kind of gap, plausibly a re-lock artifact rather than real movement
 const EYE_GRACE_MS = 1000;
 const ARMS_UNCROSS_RATIO = 1.6;   // current wrist-distance / baseline wrist-distance
 const FOOT_MOVE_THRESH = 0.08;    // normalized coords, raised-ankle drift from baseline
@@ -7146,11 +7148,13 @@ const STANCE_DRIFT_THRESH = 0.15; // normalized coords, cumulative stance-ankle 
 const EYE_OPEN_TRIGGER = 0.3;     // averaged eyeBlinkLeft/Right blendshape score
 
 let balTrialIdx = 0;
-let balPhase = "idle"; // idle | countdown | calibrating | active | done
+let balPhase = "idle"; // idle | countdown | settling | calibrating | active | done
+let balSettleStartT = null;
 let balCalibStartT = null;      // start of the CURRENT contiguous good-tracking run (resets on any lost frame)
 let balCalibAttemptStartT = null; // start of the whole calibration attempt (does NOT reset) — used for the give-up timeout
 let balLastCalibLostLogT = 0;
 let balActiveStartT = null;
+let balLastActiveLossT = -Infinity; // timestamp of the most recent lost-tracking frame during "active" — feeds REACQUIRE_GRACE_MS
 let balCalibSamples = { wristDist: [], raisedAnkle: [], stanceAnkle: [] };
 let balBaseline = { wristDist: null, raisedAnkle: null, stanceAnkle: null };
 let balPrevStanceAnkle = null;
@@ -7254,16 +7258,35 @@ function balCountdownLoop() {
     balCountdownActive = false;
     $("bal_bigPhase").textContent = "go!";
     balSpeak("Go!");
-    balBeginCalibration();
+    balBeginSettle();
     return;
   }
   requestAnimationFrame(balCountdownLoop);
+}
+// ---- Settle phase — added after a real capture showed 5 of 6 trials ending
+// within 0.4-2.1s, almost all right at the old post-calibration grace
+// boundary. Calibration used to start the instant "Go!" was spoken, snapshotting
+// a baseline during the first, still-wobbly instant of a one-leg stance —
+// natural postural sway while finding balance then immediately tripped
+// foot/stance drift against that unsettled baseline. This gives a few seconds
+// to actually find balance BEFORE anything is measured, still watching for a
+// wrong-leg mismatch the whole time. ----
+function balBeginSettle() {
+  balPhase = "settling";
+  balSettleStartT = performance.now();
+  balLegMismatchStreak = 0;
+  $("bal_channelGrid").style.display = "none";
+  $("bal_bigPhase").textContent = "find your balance…";
+  $("bal_timer").textContent = "";
+  $("bal_liveHint").textContent = "Find your balance — hold steady, then calibration starts automatically.";
+  balDiag("Trial " + (balTrialIdx + 1) + " (" + BAL_SEQUENCE[balTrialIdx] + ") settle phase started. settleMs=" + SETTLE_MS);
 }
 function balBeginCalibration() {
   balPhase = "calibrating";
   balCalibStartT = performance.now();
   balCalibAttemptStartT = balCalibStartT;
   balLastCalibLostLogT = 0;
+  balLastActiveLossT = -Infinity;
   balCalibSamples = { wristDist: [], raisedAnkle: [], stanceAnkle: [] };
   balBaseline = { wristDist: null, raisedAnkle: null, stanceAnkle: null };
   balPrevStanceAnkle = null;
@@ -7486,6 +7509,25 @@ function balLoop() {
   const visOk = (lw.visibility ?? 1) > 0.4 && (rw.visibility ?? 1) > 0.4 &&
                 (stanceAnkle.visibility ?? 1) > 0.4 && (raisedAnkle.visibility ?? 1) > 0.4;
 
+  if (balPhase === "settling") {
+    // Doesn't gate on visOk (wrist/ankle visibility) the way calibrating and
+    // active do — all this phase needs is enough tracking for the leg-match
+    // check, same tolerance as the get-ready countdown's own check.
+    if (balCheckLegMatch(now)) {
+      balDiag("Settle phase aborted — the camera kept seeing the other leg planted. Restarting the get-ready countdown.");
+      const retryMs = Math.max(3000, Math.max(0, parseFloat($("bal_readyTime").value) || 0) * 1000);
+      balStartCountdown(retryMs);
+      return;
+    }
+    const settleElapsed = now - balSettleStartT;
+    const remainS = Math.max(0, Math.ceil((SETTLE_MS - settleElapsed) / 1000));
+    $("bal_timer").textContent = remainS > 0 ? remainS + "s" : "";
+    if (settleElapsed >= SETTLE_MS) {
+      balBeginCalibration();
+    }
+    return;
+  }
+
   [lw, rw, stanceAnkle, raisedAnkle].forEach(p => {
     balCtx.fillStyle = "rgba(168,132,47,0.9)";
     balCtx.beginPath();
@@ -7511,6 +7553,7 @@ function balLoop() {
         balDiag("Tracking lost (low landmark visibility) during " + balPhase + ".");
       }
     }
+    if (balPhase === "active") balLastActiveLossT = now; // feeds REACQUIRE_GRACE_MS below, once tracking comes back
     if (balPhase === "calibrating") {
       // A dropped frame breaks the contiguous run: whatever was collected so
       // far might not reflect the same steady position as what comes next,
@@ -7607,7 +7650,12 @@ function balLoop() {
 
   const elapsedS = (now - balActiveStartT) / 1000;
   $("bal_timer").textContent = elapsedS.toFixed(1) + "s";
-  const settling = (now - balActiveStartT) < MOVEMENT_GRACE_MS;
+  // Movement channels are suppressed just after the calibration→active
+  // transition (MOVEMENT_GRACE_MS) AND just after tracking drops out and
+  // comes back mid-hold (REACQUIRE_GRACE_MS) — a real capture showed a trial
+  // ending right after exactly the latter kind of gap, plausibly a landmark
+  // re-lock artifact rather than genuine movement.
+  const inGrace = (now - balActiveStartT) < MOVEMENT_GRACE_MS || (now - balLastActiveLossT) < REACQUIRE_GRACE_MS;
 
   const armsRatio = balBaseline.wristDist ? (wristDist / balBaseline.wristDist) : 1;
   const armsTriggered = armsRatio > ARMS_UNCROSS_RATIO;
@@ -7644,7 +7692,7 @@ function balLoop() {
   // unaffected (eyes already has its own, longer grace period above).
   let triggerEvent = "";
   if (elapsedS >= BAL_TRIAL_CAP_S) triggerEvent = "trigger:timeout";
-  else if (settling) { /* movement channels not evaluated yet this frame */ }
+  else if (inGrace) { /* movement channels not evaluated yet this frame */ }
   else if (armsTriggered) triggerEvent = "trigger:arms";
   else if (footTriggered) triggerEvent = "trigger:foot";
   else if (stanceTriggered) triggerEvent = "trigger:stance";
