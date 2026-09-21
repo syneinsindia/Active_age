@@ -934,7 +934,7 @@ body.lightpanel { background: #ffffff; }
 </head>
 <body>
 
-<div id="buildBanner"><div class="inner">Build 10 &middot; 2026-09-20 &middot; Balance: spoken end-of-trial cue</div></div>
+<div id="buildBanner"><div class="inner">Build 11 &middot; 2026-09-21 &middot; Balance: steadier calibration, wrong-leg check runs during the hold too</div></div>
 
 <div class="page home-wrap" data-page="home">
 
@@ -7134,6 +7134,10 @@ balUpdateCamButtons();
 const BAL_TRIAL_CAP_S = 45;
 const BAL_SEQUENCE = ["Eyes Open", "Eyes Closed", "Eyes Open", "Eyes Closed", "Eyes Open", "Eyes Closed"];
 const CALIB_MS = 1200;
+const CALIB_MIN_SAMPLES = 10;     // minimum frames within the contiguous run below before a baseline is trusted
+const CALIB_MAX_WAIT_MS = 12000;  // give up and ask the person to reposition rather than looping silently for a minute+
+const CALIB_LOST_LOG_THROTTLE_MS = 1000; // "tracking lost" is logged at most this often, not once per frame
+const MOVEMENT_GRACE_MS = 400;    // brief settle window right after calibration ends, before arms/foot/stance can trigger — absorbs the single-frame jitter of the calibrating→active transition
 const EYE_GRACE_MS = 1000;
 const ARMS_UNCROSS_RATIO = 1.6;   // current wrist-distance / baseline wrist-distance
 const FOOT_MOVE_THRESH = 0.08;    // normalized coords, raised-ankle drift from baseline
@@ -7143,7 +7147,9 @@ const EYE_OPEN_TRIGGER = 0.3;     // averaged eyeBlinkLeft/Right blendshape scor
 
 let balTrialIdx = 0;
 let balPhase = "idle"; // idle | countdown | calibrating | active | done
-let balCalibStartT = null;
+let balCalibStartT = null;      // start of the CURRENT contiguous good-tracking run (resets on any lost frame)
+let balCalibAttemptStartT = null; // start of the whole calibration attempt (does NOT reset) — used for the give-up timeout
+let balLastCalibLostLogT = 0;
 let balActiveStartT = null;
 let balCalibSamples = { wristDist: [], raisedAnkle: [], stanceAnkle: [] };
 let balBaseline = { wristDist: null, raisedAnkle: null, stanceAnkle: null };
@@ -7256,6 +7262,8 @@ function balCountdownLoop() {
 function balBeginCalibration() {
   balPhase = "calibrating";
   balCalibStartT = performance.now();
+  balCalibAttemptStartT = balCalibStartT;
+  balLastCalibLostLogT = 0;
   balCalibSamples = { wristDist: [], raisedAnkle: [], stanceAnkle: [] };
   balBaseline = { wristDist: null, raisedAnkle: null, stanceAnkle: null };
   balPrevStanceAnkle = null;
@@ -7375,7 +7383,10 @@ function balCheckLegMatch(nowT) {
   if (balLegMismatchStreak < LEG_MISMATCH_STREAK_NEEDED) return false;
   if (nowT - balLastLegVoiceT >= LEG_VOICE_COOLDOWN_MS) {
     balLastLegVoiceT = nowT;
-    balSpeak("Wrong leg. Please balance on your " + selected + " leg.");
+    // Names both legs explicitly (which one it sees you on, which one you should
+    // be on) rather than just "please balance on your X leg" — easier to act on
+    // without having to remember which leg the dropdown said.
+    balSpeak("Wrong leg. You're on your " + detected + " leg. Please switch to your " + selected + " leg.");
     balDiag("Leg mismatch detected: selector says '" + selected + "', camera sees weight on the '" + detected + "' leg. Voice correction given.");
   }
   return true;
@@ -7491,7 +7502,37 @@ function balLoop() {
   }
 
   if (!visOk) {
-    if (balPhase === "active" || balPhase === "calibrating") balDiag("Tracking lost (low landmark visibility) during " + balPhase + ".");
+    if (balPhase === "active" || balPhase === "calibrating") {
+      // Throttled — this used to log once per lost frame, which on a shaky
+      // real capture meant hundreds of identical lines burying the one piece
+      // of useful information (how long the person has actually been stuck).
+      if (now - balLastCalibLostLogT >= CALIB_LOST_LOG_THROTTLE_MS) {
+        balLastCalibLostLogT = now;
+        balDiag("Tracking lost (low landmark visibility) during " + balPhase + ".");
+      }
+    }
+    if (balPhase === "calibrating") {
+      // A dropped frame breaks the contiguous run: whatever was collected so
+      // far might not reflect the same steady position as what comes next,
+      // so start the run over rather than quietly keep the stale samples.
+      // This is what let a baseline get built from frames scattered across a
+      // 30-90s stretch of intermittent tracking in a real capture, which then
+      // triggered an "ended by foot/stance/arms" within a fraction of a
+      // second of going active — the baseline was never really a rest position.
+      balCalibSamples = { wristDist: [], raisedAnkle: [], stanceAnkle: [] };
+      balCalibStartT = now;
+      if (now - balCalibAttemptStartT >= CALIB_MAX_WAIT_MS) {
+        balDiag("Calibration gave up after " + ((now - balCalibAttemptStartT) / 1000).toFixed(1) + "s of unreliable tracking.");
+        balPhase = "idle";
+        $("bal_bigPhase").textContent = "";
+        $("bal_timer").textContent = "—";
+        $("bal_startBtn").style.display = "block";
+        $("bal_stopBtn").style.display = "none";
+        $("bal_channelGrid").style.display = "none";
+        $("bal_liveHint").textContent = "Couldn't get a steady reading. Step back so your whole body is in frame, then tap Start Trial again.";
+        balSpeak("I'm having trouble seeing your legs clearly. Please step back so your whole body is in frame, then start the trial again.");
+      }
+    }
     return;
   }
 
@@ -7514,7 +7555,7 @@ function balLoop() {
     const elapsed = now - balCalibStartT;
     if (elapsed >= CALIB_MS) {
       const n = balCalibSamples.wristDist.length;
-      if (n >= 3) {
+      if (n >= CALIB_MIN_SAMPLES) {
         balBaseline.wristDist = balCalibSamples.wristDist.reduce((a, b) => a + b, 0) / n;
         balBaseline.raisedAnkle = {
           x: balCalibSamples.raisedAnkle.reduce((a, p) => a + p.x, 0) / n,
@@ -7529,9 +7570,20 @@ function balLoop() {
         balActiveStartT = now;
         $("bal_liveHint").textContent = BAL_SEQUENCE[balTrialIdx] === "Eyes Closed" ? "Close your eyes now — hold." : "Hold steady.";
         balDiag("Trial " + (balTrialIdx + 1) + " calibrated. wristDist0=" + balBaseline.wristDist.toFixed(3) + " n=" + n);
+      } else if (now - balCalibAttemptStartT >= CALIB_MAX_WAIT_MS) {
+        balDiag("Calibration gave up after " + ((now - balCalibAttemptStartT) / 1000).toFixed(1) + "s — never reached " + CALIB_MIN_SAMPLES + " steady frames in a row (best run n=" + n + ").");
+        balPhase = "idle";
+        $("bal_bigPhase").textContent = "";
+        $("bal_timer").textContent = "—";
+        $("bal_startBtn").style.display = "block";
+        $("bal_stopBtn").style.display = "none";
+        $("bal_channelGrid").style.display = "none";
+        $("bal_liveHint").textContent = "Couldn't get a steady reading. Step back so your whole body is in frame, then tap Start Trial again.";
+        balSpeak("I'm having trouble seeing your legs clearly. Please step back so your whole body is in frame, then start the trial again.");
       } else {
-        balDiag("Calibration extended — not enough tracked frames (n=" + n + ").");
-        balCalibStartT = now;
+        // Not yet a long enough contiguous run — keep collecting from where
+        // we are rather than resetting (elapsed already reflects the run, not
+        // wall-clock since the whole attempt began).
       }
     }
     return;
@@ -7539,8 +7591,23 @@ function balLoop() {
 
   if (balPhase !== "active") return;
 
+  // Wrong-leg check keeps running through the timed hold itself, not just the
+  // countdown and calibration — previously a mismatch that only became clear
+  // (or only arose) after calibration finished got no voice correction at
+  // all, and the trial just ended on arms/foot/stance with no explanation.
+  // Handled the same way as a calibration-time mismatch: restart the
+  // get-ready countdown for this same trial rather than recording a result,
+  // since a trial run on the wrong leg isn't a real attempt at this trial.
+  if (balCheckLegMatch(now)) {
+    balDiag("Active hold aborted — the camera kept seeing the other leg planted mid-trial. Restarting the get-ready countdown.");
+    const retryMs = Math.max(3000, Math.max(0, parseFloat($("bal_readyTime").value) || 0) * 1000);
+    balStartCountdown(retryMs);
+    return;
+  }
+
   const elapsedS = (now - balActiveStartT) / 1000;
   $("bal_timer").textContent = elapsedS.toFixed(1) + "s";
+  const settling = (now - balActiveStartT) < MOVEMENT_GRACE_MS;
 
   const armsRatio = balBaseline.wristDist ? (wristDist / balBaseline.wristDist) : 1;
   const armsTriggered = armsRatio > ARMS_UNCROSS_RATIO;
@@ -7570,8 +7637,14 @@ function balLoop() {
     balSetChannel("Eyes", "n/a", false);
   }
 
+  // Movement channels are suppressed for a brief settle window right after
+  // calibration ends — a single noisy frame at that exact transition was
+  // enough to trip arms/foot/stance within 0.03-0.1s in a real capture, well
+  // before the person could possibly have moved. Timeout and eyes are
+  // unaffected (eyes already has its own, longer grace period above).
   let triggerEvent = "";
   if (elapsedS >= BAL_TRIAL_CAP_S) triggerEvent = "trigger:timeout";
+  else if (settling) { /* movement channels not evaluated yet this frame */ }
   else if (armsTriggered) triggerEvent = "trigger:arms";
   else if (footTriggered) triggerEvent = "trigger:foot";
   else if (stanceTriggered) triggerEvent = "trigger:stance";
