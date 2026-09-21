@@ -951,7 +951,7 @@ body.lightpanel { background: #ffffff; }
 </head>
 <body>
 
-<div id="buildBanner"><div class="inner" title="Build 19 · 2026-09-21 · Chest Breathing Scan: pinned ISO too (Android was still crashing dark), chest-framing box now derived from shoulder landmarks instead of a fixed box, added confidence/plausibility gating against non-human detections">Build 19 &middot; 2026-09-21 &middot; Breathing Scan: pinned ISO too, chest box now derived from shoulders, added confidence gating</div></div>
+<div id="buildBanner"><div class="inner" title="Build 20 · 2026-09-21 · Chest Breathing Scan: stopped forcing Android into manual exposure mode entirely (3 rounds proved pinning values doesn't fix its brightness crash), and loosened the chest-framing guide so a reasonable framing actually shows green">Build 20 &middot; 2026-09-21 &middot; Breathing Scan: Android no longer forced into manual exposure mode; framing guide loosened to actually show green</div></div>
 
 <div class="page home-wrap" data-page="home">
 
@@ -6580,7 +6580,7 @@ const roiCanvas = $("b_roiCanvas");
 const roiCtx = roiCanvas.getContext("2d", { willReadFrequently: true });
 const roiGuideEl = document.querySelector(".panel-breath .roi-guide");
 
-const APP_VERSION = "1.5.0";
+const APP_VERSION = "1.6.0";
 const PLATFORM = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream ? "iOS"
   : /Android/.test(navigator.userAgent) ? "Android" : "Desktop";
 $("b_verPill").textContent = "v" + APP_VERSION + " · " + PLATFORM;
@@ -6765,8 +6765,35 @@ async function openCamera() {
 // silently resets ISO to its own default (plausibly a low one) would produce
 // exactly this: a correct exposureTime, and a dark frame anyway. iOS never
 // exercises this path at all (its track settings expose no exposureMode/iso
-// capability, so the exposureMode branch below never fires there). Fix: pin
-// ISO the same way exposureTime and colorTemperature already are.
+// capability, so the exposureMode branch below never fired there). Fix
+// attempted: pin ISO the same way exposureTime and colorTemperature already
+// are.
+//
+// Round 4 (Build 20) shows that attempt failed too — same device, same
+// symptom, same timing (bright and steady for ~300-400ms, then a hard crash
+// exactly when the lock takes effect), even with exposureTime AND iso both
+// pinned to the exact live values getSettings() reported a moment earlier.
+// Three rounds now, three different things pinned with increasing precision,
+// the identical crash every time. That pattern stops pointing at "which
+// value is missing" and starts pointing at the mode switch itself: Android
+// camera pipelines commonly apply additional auto-exposure/tone-mapping gain
+// on top of the raw sensor's exposureTime/ISO while in continuous mode, and
+// drop that extra brightening the instant exposureMode switches to "manual"
+// — which would produce exactly this, a real step-change in brightness with
+// the "correct" shutter and ISO numbers both still in effect, because the
+// missing brightness was never in those two numbers to begin with. No
+// combination of advanced-constraint values can restore gain the manual
+// pipeline doesn't apply. Fix: stop switching this device into
+// exposureMode:"manual" at all — rely on continuous auto-exposure through
+// the whole capture instead, and let the analysis pipeline's existing
+// detrendEMA (20s time constant, built for exactly this kind of slow drift)
+// absorb whatever gentle hunting continuous mode does. That trades a
+// theoretical slow drift for a guaranteed-not-to-happen hard crash, which
+// three rounds of evidence say is a better trade on this device. White
+// balance is untouched by this — the crash is a brightness effect, not a
+// color-temperature one (an 80%+ luminance drop is far larger than any
+// plausible white-balance retint), and iOS's white-balance-only lock has
+// worked cleanly since Round 2, so there's no evidence implicating it.
 async function lockExposureForCapture() {
   const track = stream && stream.getVideoTracks()[0];
   if (!track) return;
@@ -6774,12 +6801,11 @@ async function lockExposureForCapture() {
   const settings = track.getSettings ? track.getSettings() : {};
   const advanced = [];
   const clamp = (v, range) => (range && range.min != null && range.max != null) ? Math.min(range.max, Math.max(range.min, v)) : v;
-  if (caps.exposureMode && caps.exposureMode.includes && caps.exposureMode.includes("manual")) {
-    const c = { exposureMode: "manual" };
-    if (settings.exposureTime != null && caps.exposureTime) c.exposureTime = clamp(settings.exposureTime, caps.exposureTime);
-    if (settings.iso != null && caps.iso) c.iso = clamp(settings.iso, caps.iso);
-    advanced.push(c);
-  }
+  // Deliberately NOT locking exposureMode:"manual" here — see the comment
+  // above. Three real-device rounds on Android showed it crashes brightness
+  // regardless of which values are pinned alongside it, so this tool now
+  // stays on continuous auto-exposure for the whole capture on every
+  // platform, and only locks white balance where the device supports it.
   if (caps.whiteBalanceMode && caps.whiteBalanceMode.includes && caps.whiteBalanceMode.includes("manual")) {
     const c = { whiteBalanceMode: "manual" };
     if (settings.colorTemperature != null && caps.colorTemperature) c.colorTemperature = clamp(settings.colorTemperature, caps.colorTemperature);
@@ -6788,11 +6814,11 @@ async function lockExposureForCapture() {
   if (advanced.length) {
     try {
       await track.applyConstraints({ advanced });
-      diag("Exposure/white-balance locked for capture. Pinned values: " + JSON.stringify(advanced));
+      diag("White balance locked for capture (exposure left on continuous — see code comment). Pinned values: " + JSON.stringify(advanced));
     }
     catch (err) { diag("Lock constraint rejected: " + err.name); }
   } else {
-    diag("No manual exposure/white-balance control available on this browser — relying on stable room lighting.");
+    diag("No manual white-balance control available on this browser — relying on stable room lighting and continuous auto-exposure.");
   }
 }
 // ---- Chest-framing guide (green/red), added after a real round found the
@@ -6839,9 +6865,26 @@ async function lockExposureForCapture() {
 const POSE_LEFT_SHOULDER = 11, POSE_RIGHT_SHOULDER = 12;
 const SHOULDER_MIN_VISIBILITY = 0.5;
 const SHOULDER_DIST_MIN = 0.06, SHOULDER_DIST_MAX = 0.75; // implausible outside this range for a real torso in frame
-const CHEST_BOX_WIDTH_MULT = 2.6, CHEST_BOX_HEIGHT_MULT = 2.1;
+const CHEST_BOX_WIDTH_MULT = 2.2, CHEST_BOX_HEIGHT_MULT = 1.8;
 const CHEST_BOX_TOP_MARGIN_MULT = 0.15; // skip a sliver of neck right at the shoulder line
-const CHEST_BOX_CLIP_TOLERANCE = 0.02; // how far the natural box may exceed frame bounds before we call it "bad" instead of silently cropping
+// Round 4 (Build 20) found the guide almost never went green in practice —
+// the diagnostics showed a confident, plausible chest-box detection DID
+// happen (it's what the capture actually used), but the visual guide stayed
+// red/neutral throughout the ~40s the person spent trying to frame
+// themselves. The original all-or-nothing clip check explains why: at
+// CHEST_BOX_WIDTH_MULT/HEIGHT_MULT of 2.6/2.1, a fairly ordinary framing
+// distance (shoulder width ~0.3 of frame) already produces a natural box
+// close to the frame's full width, so anything even slightly closer pushed
+// the box past the edge and was flagged "bad" outright — treating a person
+// who was reasonably framed, just a bit close, the same as someone who
+// wasn't framed at all. Fixed two ways: smaller multipliers (still enough
+// torso coverage below the shoulders, less prone to overrunning the frame at
+// normal distances), and replacing the strict edge check with a clip
+// *fraction* — only the portion of the box that would actually fall outside
+// the frame counts against it, and a modest amount (a sliver of margin
+// cropped off one side) is accepted and simply clamped to fit, rather than
+// rejected outright.
+const CHEST_BOX_MAX_CLIP_FRACTION = 0.35; // up to 35% of the natural box's area may fall outside frame and still be accepted (clamped)
 // Fallback ROI used only if no confident chest box is available the instant
 // "Capture" is pressed (e.g. a brief tracking dropout) — the old fixed box,
 // kept as a safety net rather than blocking capture outright.
@@ -6869,9 +6912,10 @@ async function initPoseModel() {
 // Computes the chest-sampling box from the two shoulder landmarks, in raw
 // (unmirrored) 0-1 landmark space. Returns null if the detection isn't
 // confident/plausible enough to trust, or {x,y,w,h,clipped} otherwise —
-// clipped=true means the natural box ran past the frame edge (subject too
-// close / off-center) and had to be cropped to fit, which the guide treats
-// as "not quite framed" rather than silently sampling a squashed box.
+// clipped=true means MORE than CHEST_BOX_MAX_CLIP_FRACTION of the natural
+// box fell outside the frame (subject too close / off-center to fit even
+// after a reasonable margin is allowed), which the guide treats as "not
+// quite framed." A smaller amount of overrun is accepted and clamped to fit.
 function computeChestBox(lm) {
   const ls = lm[POSE_LEFT_SHOULDER], rs = lm[POSE_RIGHT_SHOULDER];
   if (!ls || !rs) return null;
@@ -6885,11 +6929,22 @@ function computeChestBox(lm) {
   const h = shoulderW * CHEST_BOX_HEIGHT_MULT;
   const x = midX - w / 2;
   const y = midY + shoulderW * CHEST_BOX_TOP_MARGIN_MULT;
-  const clipped = (x < -CHEST_BOX_CLIP_TOLERANCE) || (x + w > 1 + CHEST_BOX_CLIP_TOLERANCE) ||
-                  (y < -CHEST_BOX_CLIP_TOLERANCE) || (y + h > 1 + CHEST_BOX_CLIP_TOLERANCE);
-  const cx = Math.max(0, Math.min(1 - w, x));
-  const cy = Math.max(0, Math.min(1 - h, y));
-  return { x: cx, y: cy, w, h, clipped };
+  // How much of the natural box actually falls outside the frame — only the
+  // fraction of its area that would need cropping counts, not just whether
+  // any of it crosses the edge at all.
+  const overlapW = Math.max(0, Math.min(x + w, 1) - Math.max(x, 0));
+  const overlapH = Math.max(0, Math.min(y + h, 1) - Math.max(y, 0));
+  const naturalArea = w * h;
+  const clipFraction = naturalArea > 0 ? 1 - (overlapW * overlapH) / naturalArea : 1;
+  const clipped = clipFraction > CHEST_BOX_MAX_CLIP_FRACTION;
+  const cw = Math.min(w, 1);
+  const ch = Math.min(h, 1);
+  let cx = x, cy = y;
+  if (cx < 0) cx = 0;
+  if (cx + cw > 1) cx = 1 - cw;
+  if (cy < 0) cy = 0;
+  if (cy + ch > 1) cy = 1 - ch;
+  return { x: cx, y: cy, w: cw, h: ch, clipped };
 }
 
 function setRoiGuideState(ok, box) {
