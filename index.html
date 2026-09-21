@@ -951,7 +951,7 @@ body.lightpanel { background: #ffffff; }
 </head>
 <body>
 
-<div id="buildBanner"><div class="inner" title="Build 22 · 2026-09-21 · Chest Breathing Scan: added a diagnostics log explaining exactly why the framing guide isn't confirming framed — no landmarks, low shoulder visibility, implausible shoulder distance, or too clipped, with the numbers behind whichever one it is — so a not-yet-understood case like Round 6's front-camera miss can be diagnosed from data instead of guessed at">Build 22 &middot; 2026-09-21 &middot; Breathing Scan: added a diagnostics log explaining exactly why the framing guide isn't confirming framed</div></div>
+<div id="buildBanner"><div class="inner" title="Build 23 · 2026-09-21 · Chest Breathing Scan: Round 7's new diagnostics explained the front camera's persistent no-lock — close-up framing puts shoulder width at ~0.75-0.79 of frame, past the old implausible-distance cap, and the chest box math wants ~1.65x the frame's width at that scale. Raised the plausible-distance cap to 0.90 and the box now scales itself down to fit the frame instead of relying on clip tolerance to rescue an oversized box">Build 23 &middot; 2026-09-21 &middot; Breathing Scan: fixed the front camera's box-too-big-for-frame bug found in Round 7's diagnostics</div></div>
 
 <div class="page home-wrap" data-page="home">
 
@@ -6580,7 +6580,7 @@ const roiCanvas = $("b_roiCanvas");
 const roiCtx = roiCanvas.getContext("2d", { willReadFrequently: true });
 const roiGuideEl = document.querySelector(".panel-breath .roi-guide");
 
-const APP_VERSION = "1.8.0";
+const APP_VERSION = "1.9.0";
 const PLATFORM = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream ? "iOS"
   : /Android/.test(navigator.userAgent) ? "Android" : "Desktop";
 $("b_verPill").textContent = "v" + APP_VERSION + " · " + PLATFORM;
@@ -6864,7 +6864,7 @@ async function lockExposureForCapture() {
 // as a known limitation of the model, not a closed issue.
 const POSE_LEFT_SHOULDER = 11, POSE_RIGHT_SHOULDER = 12;
 const SHOULDER_MIN_VISIBILITY = 0.5;
-const SHOULDER_DIST_MIN = 0.06, SHOULDER_DIST_MAX = 0.75; // implausible outside this range for a real torso in frame
+const SHOULDER_DIST_MIN = 0.06, SHOULDER_DIST_MAX = 0.90; // implausible outside this range for a real torso in frame — raised from 0.75 in Round 7/Build 23, see note below
 const CHEST_BOX_WIDTH_MULT = 2.2, CHEST_BOX_HEIGHT_MULT = 1.8;
 const CHEST_BOX_TOP_MARGIN_MULT = 0.15; // skip a sliver of neck right at the shoulder line
 // Round 4 (Build 20) found the guide almost never went green in practice —
@@ -6885,6 +6885,29 @@ const CHEST_BOX_TOP_MARGIN_MULT = 0.15; // skip a sliver of neck right at the sh
 // cropped off one side) is accepted and simply clamped to fit, rather than
 // rejected outright.
 const CHEST_BOX_MAX_CLIP_FRACTION = 0.35; // up to 35% of the natural box's area may fall outside frame and still be accepted (clamped)
+// Round 7 (Build 23): the diagnostics-only build from the previous round
+// showed exactly why the front camera never locked — not a one-off, but a
+// consistent implausible_shoulder_distance/too_clipped pattern for the
+// entire trial, with shoulderW repeatedly landing at 0.75-0.79, right at (or
+// just over) the old SHOULDER_DIST_MAX of 0.75. That's expected geometry, not
+// a bad detection: the front camera is held close (arm's length, similar to
+// a selfie), so the shoulders legitimately span most of the frame. The old
+// cap was rejecting real, in-frame people as implausible. Worse, even the
+// trials that cleared that cap still failed on too_clipped, because
+// CHEST_BOX_WIDTH_MULT(2.2) x a shoulderW near 0.75 wants a box ~1.65x wider
+// than the entire raw frame — no clip-fraction tolerance can rescue a box
+// that's mathematically larger than the frame it's supposed to fit in. Fixed
+// two ways: SHOULDER_DIST_MAX raised to 0.90 so close-up front-camera framing
+// isn't flagged implausible, and the box itself is now scaled down (below)
+// before it can exceed the frame, instead of being left oversized and
+// clipped. Trial 1's raw trace corroborates the causal chain end to end: with
+// the guide never confirming "framed," raw luminance swung across an 80-point
+// range (109-188) as the person kept repositioning looking for green, versus
+// a 14-point range (88-103) on trial 2's back-camera capture, which locked
+// immediately and stayed locked — the framing-guide bug wasn't just a visual
+// annoyance, it was also feeding the respiratory-rate extraction a
+// motion-dominated signal on the front camera.
+const CHEST_BOX_MAX_FRAME_FRACTION = 0.92; // box is scaled down (preserving aspect, staying centered) before its width would exceed this fraction of the raw frame
 // Fallback ROI used only if no confident chest box is available the instant
 // "Capture" is pressed (e.g. a brief tracking dropout) — the old fixed box,
 // kept as a safety net rather than blocking capture outright.
@@ -6991,8 +7014,18 @@ function computeChestBox(lm, video) {
   }
   const midX = (ls.x + rs.x) / 2;
   const midY = (ls.y + rs.y) / 2;
-  const w = shoulderW * CHEST_BOX_WIDTH_MULT;
-  const h = shoulderW * CHEST_BOX_HEIGHT_MULT;
+  let w = shoulderW * CHEST_BOX_WIDTH_MULT;
+  let h = shoulderW * CHEST_BOX_HEIGHT_MULT;
+  // Close-up framing (typical on the front camera, held at arm's length) can
+  // put shoulderW high enough that this box wants more width than the raw
+  // frame has at all — see the Round 7/Build 23 note above. Scale both
+  // dimensions down together so the box still fits, rather than leaving it
+  // oversized and relying on the clip-fraction tolerance to rescue it.
+  if (w > CHEST_BOX_MAX_FRAME_FRACTION) {
+    const scale = CHEST_BOX_MAX_FRAME_FRACTION / w;
+    w *= scale;
+    h *= scale;
+  }
   const x = midX - w / 2;
   const y = midY + shoulderW * CHEST_BOX_TOP_MARGIN_MULT;
 
