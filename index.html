@@ -951,7 +951,7 @@ body.lightpanel { background: #ffffff; }
 </head>
 <body>
 
-<div id="buildBanner"><div class="inner" title="Build 20 · 2026-09-21 · Chest Breathing Scan: stopped forcing Android into manual exposure mode entirely (3 rounds proved pinning values doesn't fix its brightness crash), and loosened the chest-framing guide so a reasonable framing actually shows green">Build 20 &middot; 2026-09-21 &middot; Breathing Scan: Android no longer forced into manual exposure mode; framing guide loosened to actually show green</div></div>
+<div id="buildBanner"><div class="inner" title="Build 21 · 2026-09-21 · Chest Breathing Scan: found the real bug behind the guide box moving around and never turning green — it was drawing raw camera-frame coordinates directly onto a cropped portrait preview instead of mapping between the two">Build 21 &middot; 2026-09-21 &middot; Breathing Scan: framing guide now correctly maps raw camera coordinates onto the cropped preview</div></div>
 
 <div class="page home-wrap" data-page="home">
 
@@ -6580,7 +6580,7 @@ const roiCanvas = $("b_roiCanvas");
 const roiCtx = roiCanvas.getContext("2d", { willReadFrequently: true });
 const roiGuideEl = document.querySelector(".panel-breath .roi-guide");
 
-const APP_VERSION = "1.6.0";
+const APP_VERSION = "1.7.0";
 const PLATFORM = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream ? "iOS"
   : /Android/.test(navigator.userAgent) ? "Android" : "Desktop";
 $("b_verPill").textContent = "v" + APP_VERSION + " · " + PLATFORM;
@@ -6909,14 +6909,69 @@ async function initPoseModel() {
   diag("PoseLandmarker model loaded.");
 }
 
-// Computes the chest-sampling box from the two shoulder landmarks, in raw
-// (unmirrored) 0-1 landmark space. Returns null if the detection isn't
-// confident/plausible enough to trust, or {x,y,w,h,clipped} otherwise —
-// clipped=true means MORE than CHEST_BOX_MAX_CLIP_FRACTION of the natural
-// box fell outside the frame (subject too close / off-center to fit even
-// after a reasonable margin is allowed), which the guide treats as "not
-// quite framed." A smaller amount of overrun is accepted and clamped to fit.
-function computeChestBox(lm) {
+// Round 5 (Build 21) found a much bigger problem behind "the red square
+// keeps moving, never turns green, and shrinks if I hold the phone
+// horizontal": the raw camera frame this device delivers is ALWAYS landscape
+// (640x480, confirmed from every "Camera opened" diagnostics line this whole
+// project, regardless of the phone's physical orientation), while the
+// on-screen preview (.video-wrap) is a fixed 3:4 PORTRAIT box using
+// object-fit:cover. Cover-fitting a 4:3 source into a 3:4 box means the
+// browser scales the video up until it fills the box's height, then crops
+// the excess off both the left and right — on this device that crops away
+// roughly the outer 22% of the raw frame on EACH side, so only the center
+// ~56% of the raw frame's width is ever actually visible on screen.
+// MediaPipe's landmarks and sampleRoiFrame()'s canvas draws both operate in
+// that full, UNCROPPED raw frame — correctly, since that's the real pixel
+// data. But computeChestBox()/positionGuideEl() were treating a raw-frame
+// fraction as if it were a fraction of the visible, cropped preview, so a
+// perfectly good chest-box detection (confirmed by the diagnostics: a
+// pose-derived box WAS found and used for capture both trials this round)
+// could compute to a position outside the visible ~56% strip, or shifted
+// from where the person visually appears — which reads exactly as "moving
+// across the window" and "never turns green" even while correctly framed,
+// since the guide was never drawing in the right place to begin with. This
+// wasn't present before Build 19 because the old guide was a fixed CSS box
+// (always correctly positioned on the visible preview by construction,
+// since it was never derived from raw landmark coordinates) — the bug was
+// introduced when the guide became landmark-derived and the crop mapping
+// was missed. It also explains "phone horizontal shrinks the frame": turning
+// the phone doesn't change this crop math at all, only how much of the
+// raw (always-landscape) sensor frame the shoulders happen to occupy — nothing
+// here was ever compensating for hold orientation, so that shrink was a
+// symptom of the same missing mapping, not a separate bug.
+// Fix: compute the box in raw landmark space as before (for sampleRoiFrame,
+// which must stay in raw space — it draws real pixels off the real frame),
+// but separately project it into display space through the same cover-fit
+// math the browser itself uses, and judge "is this framed" and draw the
+// guide from THAT — the space the person can actually see and control.
+const VIDEO_WRAP_ASPECT = 3 / 4; // must match .panel-breath .video-wrap's CSS aspect-ratio
+function rawToDisplayFraction(video, rawX, rawY) {
+  const vw = video.videoWidth || 480, vh = video.videoHeight || 640;
+  const videoAr = vw / vh;
+  if (videoAr > VIDEO_WRAP_ASPECT) {
+    // Raw frame is relatively wider than the preview box -> left/right crop.
+    const visibleFrac = VIDEO_WRAP_ASPECT / videoAr;
+    const off = (1 - visibleFrac) / 2;
+    return { x: (rawX - off) / visibleFrac, y: rawY };
+  } else if (videoAr < VIDEO_WRAP_ASPECT) {
+    // Raw frame is relatively taller than the preview box -> top/bottom crop.
+    const visibleFrac = videoAr / VIDEO_WRAP_ASPECT;
+    const off = (1 - visibleFrac) / 2;
+    return { x: rawX, y: (rawY - off) / visibleFrac };
+  }
+  return { x: rawX, y: rawY };
+}
+
+// Computes the chest box from the two shoulder landmarks. Returns null if
+// the detection isn't confident/plausible enough to trust, or
+// {raw, display, clipped} otherwise: `raw` is the box in raw (unmirrored)
+// video-frame fraction space, for sampleRoiFrame() to sample real pixels
+// from; `display` is that same box projected into the visible, cropped
+// preview's fraction space, for the on-screen guide. `clipped`=true means
+// more than CHEST_BOX_MAX_CLIP_FRACTION of the box (measured in DISPLAY
+// space, i.e. from what the person can actually see and adjust) falls
+// outside the visible preview — a smaller overrun is accepted and clamped.
+function computeChestBox(lm, video) {
   const ls = lm[POSE_LEFT_SHOULDER], rs = lm[POSE_RIGHT_SHOULDER];
   if (!ls || !rs) return null;
   if ((ls.visibility != null && ls.visibility < SHOULDER_MIN_VISIBILITY) ||
@@ -6929,22 +6984,38 @@ function computeChestBox(lm) {
   const h = shoulderW * CHEST_BOX_HEIGHT_MULT;
   const x = midX - w / 2;
   const y = midY + shoulderW * CHEST_BOX_TOP_MARGIN_MULT;
-  // How much of the natural box actually falls outside the frame — only the
-  // fraction of its area that would need cropping counts, not just whether
-  // any of it crosses the edge at all.
-  const overlapW = Math.max(0, Math.min(x + w, 1) - Math.max(x, 0));
-  const overlapH = Math.max(0, Math.min(y + h, 1) - Math.max(y, 0));
-  const naturalArea = w * h;
+
+  // Raw-space box, clamped to the sensor's own extent — what sampleRoiFrame()
+  // actually samples pixels from.
+  const rw = Math.min(w, 1), rh = Math.min(h, 1);
+  let rx = x, ry = y;
+  if (rx < 0) rx = 0;
+  if (rx + rw > 1) rx = 1 - rw;
+  if (ry < 0) ry = 0;
+  if (ry + rh > 1) ry = 1 - rh;
+
+  // Project the natural (unclamped) raw box's corners into display space to
+  // judge how much of it the person can actually see, and to draw the guide.
+  const tl = rawToDisplayFraction(video, x, y);
+  const br = rawToDisplayFraction(video, x + w, y + h);
+  const dx = tl.x, dy = tl.y, dw = br.x - tl.x, dh = br.y - tl.y;
+  const overlapW = Math.max(0, Math.min(dx + dw, 1) - Math.max(dx, 0));
+  const overlapH = Math.max(0, Math.min(dy + dh, 1) - Math.max(dy, 0));
+  const naturalArea = dw * dh;
   const clipFraction = naturalArea > 0 ? 1 - (overlapW * overlapH) / naturalArea : 1;
   const clipped = clipFraction > CHEST_BOX_MAX_CLIP_FRACTION;
-  const cw = Math.min(w, 1);
-  const ch = Math.min(h, 1);
-  let cx = x, cy = y;
-  if (cx < 0) cx = 0;
-  if (cx + cw > 1) cx = 1 - cw;
-  if (cy < 0) cy = 0;
-  if (cy + ch > 1) cy = 1 - ch;
-  return { x: cx, y: cy, w: cw, h: ch, clipped };
+  const cdw = Math.min(Math.max(dw, 0), 1), cdh = Math.min(Math.max(dh, 0), 1);
+  let cdx = dx, cdy = dy;
+  if (cdx < 0) cdx = 0;
+  if (cdx + cdw > 1) cdx = 1 - cdw;
+  if (cdy < 0) cdy = 0;
+  if (cdy + cdh > 1) cdy = 1 - cdh;
+
+  return {
+    raw: { x: rx, y: ry, w: rw, h: rh },
+    display: { x: cdx, y: cdy, w: cdw, h: cdh },
+    clipped
+  };
 }
 
 function setRoiGuideState(ok, box) {
@@ -6958,11 +7029,11 @@ function setRoiGuideState(ok, box) {
   if (ok === true) { roiGuideEl.classList.add("ok"); if (box) positionGuideEl(box); }
   else if (ok === false) roiGuideEl.classList.add("bad");
 }
-// Moves/resizes the on-screen guide box to match the just-computed chest box.
-// The box itself is raw (unmirrored) landmark-space; the front camera's
-// video is CSS-mirrored for display (scaleX(-1)), so its on-screen left edge
-// has to be flipped to land in the right place — same mirroring rule
-// pointInRoi used to apply, now applied once here instead of per-point.
+// Moves/resizes the on-screen guide box to match the just-computed chest
+// box. `box` here is already in DISPLAY-space fraction (see computeChestBox
+// above) — the front camera's video is CSS-mirrored for display
+// (scaleX(-1)), so its on-screen left edge still has to be flipped to land
+// in the right place, same as before.
 function positionGuideEl(box) {
   if (!roiGuideEl) return;
   const mirrored = $("b_camMode").value === "user";
@@ -6978,10 +7049,10 @@ function poseGuideLoop() {
   if (!poseLandmarker || video.readyState < 2) return;
   const result = poseLandmarker.detectForVideo(video, performance.now());
   if (result.landmarks && result.landmarks.length > 0) {
-    const box = computeChestBox(result.landmarks[0]);
+    const box = computeChestBox(result.landmarks[0], video);
     if (box && !box.clipped) {
-      lastGoodChestBox = box;
-      setRoiGuideState(true, box);
+      lastGoodChestBox = box.raw;
+      setRoiGuideState(true, box.display);
     } else {
       setRoiGuideState(false);
     }
