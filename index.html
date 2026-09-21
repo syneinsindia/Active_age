@@ -951,7 +951,7 @@ body.lightpanel { background: #ffffff; }
 </head>
 <body>
 
-<div id="buildBanner"><div class="inner" title="Build 26 · 2026-09-21 · Chest Breathing Camera (breath panel, v1.11.0): a real-device test found the rear camera would lock onto and capture someone's BACK as if it were their chest — MediaPipe's shoulder landmarks look geometrically similar from either side, and nothing checked orientation. Added a nose-visibility gate (new face_not_visible rejection reason): the guide now also requires the nose landmark to be confidently visible, which should be near-zero when facing away and still visible for the tool's legitimate rear-camera-with-helper use case. Reasoned from how the pose model works, not yet confirmed by a real-device round — needs testing both the case this should now reject (back of torso) and the case it must still accept (helper pointing the phone at someone else's front)">Build 26 &middot; 2026-09-21 &middot; Breath: added a nose-visibility check so the rear camera no longer mistakes someone's back for their chest — unconfirmed, needs a real-device retest</div></div>
+<div id="buildBanner"><div class="inner" title="Build 27 · 2026-09-21 · Chest Breathing Camera (breath panel, v1.12.0): a real-device test found showing a hand to the rear camera still ran a capture. Not a pose-model mistake — startCapture() only checked whether a confident chest box had EVER been seen this session, not whether it still reflected what's in frame right now, so covering the lens (or stepping away) after an earlier good lock silently reused that old box. Fixed by timestamping each lock and only trusting it at capture time if it is under 500ms old; anything staler now falls back to the fixed ROI, the same safety net already used when tracking never locked at all. Round 11's separate nose-visibility orientation fix (rear camera mistaking someone's back for their chest) is still unconfirmed either way — no data yet that specifically retested it">Build 27 &middot; 2026-09-21 &middot; Breath: Capture no longer reuses a stale chest-box lock from earlier in the session — fixes capturing on a hand or covered lens</div></div>
 
 <div class="page home-wrap" data-page="home">
 
@@ -6580,7 +6580,7 @@ const roiCanvas = $("b_roiCanvas");
 const roiCtx = roiCanvas.getContext("2d", { willReadFrequently: true });
 const roiGuideEl = document.querySelector(".panel-breath .roi-guide");
 
-const APP_VERSION = "1.11.0"; // 1.11.0 (Round 11/Build 26): added a nose-visibility orientation gate so a rear camera pointed at someone's back is no longer accepted as a chest
+const APP_VERSION = "1.12.0"; // 1.12.0 (Round 12/Build 27): Capture now checks the pose lock is still fresh (<500ms old), not just that one was ever seen this session — fixes capturing on a hand/covered lens using a stale chest box from earlier
 const PLATFORM = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream ? "iOS"
   : /Android/.test(navigator.userAgent) ? "Android" : "Desktop";
 $("b_verPill").textContent = "v" + APP_VERSION + " · " + PLATFORM;
@@ -6954,6 +6954,23 @@ const CHEST_BOX_MAX_FRAME_FRACTION = 0.92; // box is scaled down (preserving asp
 const FALLBACK_ROI = { x: 0.10, y: 0.16, w: 0.80, h: 0.58 };
 
 let lastGoodChestBox = null; // raw (unmirrored) landmark-space {x,y,w,h}, updated whenever the guide is confidently "ok"
+let lastGoodChestBoxTime = 0; // performance.now() timestamp of that update — Round 12/Build 27, see note below
+// Round 12 (Build 27): reported plainly — "yes rear camera, i showed my hand,
+// it detected and ran the test." Not a pose-model failure (a hand alone
+// wouldn't pass the shoulder-landmark checks) — the actual bug was in
+// startCapture() below, which only ever checked whether lastGoodChestBox had
+// EVER been set this session, not whether it still reflected what's in frame
+// right now. A person's chest locks the guide once, lastGoodChestBox gets
+// saved and then simply sits there — unlimited staleness — so pressing
+// Capture minutes later, after covering the lens with a hand or stepping
+// away, silently reused whatever chest box was last confidently seen,
+// however old. The capture ran on a hand not because the hand was
+// misidentified as a chest, but because the code never re-checked. Fixed by
+// timestamping every confident lock and only trusting it at capture time if
+// it's still fresh (below); a stale or absent lock now falls back to the
+// fixed ROI instead, the same safety net already used when tracking has
+// never locked at all.
+const CHEST_BOX_STALENESS_MS = 500; // a couple of dropped frames is normal jitter and still trusted; anything older means whatever was in frame has likely changed
 
 async function initPoseModel() {
   $("b_poseModelPill").innerHTML = '<span class="pill wait">loading pose model</span>';
@@ -7196,6 +7213,7 @@ function poseGuideLoop() {
     logGuideReasonThrottled(box);
     if (box.ok) {
       lastGoodChestBox = box.raw;
+      lastGoodChestBoxTime = performance.now();
       setRoiGuideState(true, box.display);
     } else {
       setRoiGuideState(false);
@@ -7246,12 +7264,18 @@ $("b_captureBtn").addEventListener("click", async () => {
   // Freeze the chest box for the whole capture, rather than recomputing it
   // every tick — a person's shoulders can wobble slightly frame to frame,
   // and re-deriving the box each tick would let that wobble shift what's
-  // being sampled mid-capture. Falls back to the old fixed box only if no
-  // confident pose was available the instant Capture was pressed.
-  const captureBox = lastGoodChestBox || FALLBACK_ROI;
-  diag("Capture using " + (lastGoodChestBox ? "pose-derived" : "fallback fixed") + " chest box: " + JSON.stringify({
+  // being sampled mid-capture. Falls back to the old fixed box if no
+  // confident pose was available the instant Capture was pressed — and, as
+  // of Round 12/Build 27, "the instant Capture was pressed" is now checked
+  // for real: lastGoodChestBox only counts if it was confirmed within the
+  // last CHEST_BOX_STALENESS_MS, not just at some earlier point this
+  // session (see the note above lastGoodChestBox's declaration).
+  const lockAgeMs = lastGoodChestBox ? performance.now() - lastGoodChestBoxTime : Infinity;
+  const useLiveLock = lastGoodChestBox && lockAgeMs <= CHEST_BOX_STALENESS_MS;
+  const captureBox = useLiveLock ? lastGoodChestBox : FALLBACK_ROI;
+  diag("Capture using " + (useLiveLock ? "pose-derived" : "fallback fixed") + " chest box: " + JSON.stringify({
     x: +captureBox.x.toFixed(3), y: +captureBox.y.toFixed(3), w: +captureBox.w.toFixed(3), h: +captureBox.h.toFixed(3)
-  }));
+  }) + (lastGoodChestBox && !useLiveLock ? ` (last confident lock was ${lockAgeMs.toFixed(0)}ms ago, stale)` : ""));
   const durationMs = parseInt($("b_capDur").value, 10) * 1000;
   const samples = [];
   const t0 = performance.now();
