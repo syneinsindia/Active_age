@@ -938,7 +938,7 @@ body.lightpanel { background: #ffffff; }
 </head>
 <body>
 
-<div id="buildBanner"><div class="inner">Build 14 &middot; 2026-09-21 &middot; Blink-Rate: both-eyes score fix, green/red eye-guide circle, raw trace export (code-review fixes, awaiting real-device data)</div></div>
+<div id="buildBanner"><div class="inner">Build 16 &middot; 2026-09-21 &middot; Chest Breathing Scan (#breath): added raw luminance trace export ahead of its first real-device round</div></div>
 
 <div class="page home-wrap" data-page="home">
 
@@ -1863,6 +1863,7 @@ body.lightpanel { background: #ffffff; }
     </table>
   </div>
   <button id="b_exportBtn" class="btn-secondary" style="margin-top:10px;">Export CSV</button>
+  <button id="b_exportTraceBtn" class="btn-secondary">Export raw trace</button>
   <button id="b_exportDiagBtn" class="btn-secondary">Export diagnostics log</button>
 </section>
 
@@ -6562,7 +6563,7 @@ const video = $("b_video");
 const roiCanvas = $("b_roiCanvas");
 const roiCtx = roiCanvas.getContext("2d", { willReadFrequently: true });
 
-const APP_VERSION = "1.0.0";
+const APP_VERSION = "1.1.0";
 const PLATFORM = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream ? "iOS"
   : /Android/.test(navigator.userAgent) ? "Android" : "Desktop";
 $("b_verPill").textContent = "v" + APP_VERSION + " · " + PLATFORM;
@@ -6658,16 +6659,16 @@ const FS_HZ = 10; // resample target — breathing band tops out at 0.5Hz, 10Hz 
 const PEAKINESS_THRESHOLD = 0.40;
 
 function analyzeChestCapture(samples) {
-  if (samples.length < 60) return { rate: null, peakiness: null, quality: "no_signal", reason: "too few frames captured" };
+  if (samples.length < 60) return { rate: null, peakiness: null, quality: "no_signal", reason: "too few frames captured", smoothSeries: null };
   const ac = detrendEMA(samples, 20000); // remove slow lighting drift, keep breathing band
   const acPaired = samples.map((s, i) => ({ t: s.t, v: ac[i] }));
   const smooth = movingAverage(acPaired, 400).map((v, i) => ({ t: samples[i].t, v })); // blur frame-to-frame camera noise
   const values = smooth.map(s => s.v);
   const amp = Math.max(...values) - Math.min(...values);
-  if (amp < 0.3) return { rate: null, peakiness: null, amp, quality: "no_signal", reason: "no detectable chest motion — check framing and that clothing/lighting gives enough contrast" };
+  if (amp < 0.3) return { rate: null, peakiness: null, amp, quality: "no_signal", reason: "no detectable chest motion — check framing and that clothing/lighting gives enough contrast", smoothSeries: smooth };
 
   const uniform = resampleUniform(smooth, FS_HZ);
-  if (uniform.length < 40) return { rate: null, peakiness: null, amp, quality: "no_signal", reason: "too few resampled points" };
+  if (uniform.length < 40) return { rate: null, peakiness: null, amp, quality: "no_signal", reason: "too few resampled points", smoothSeries: smooth };
   const windowed = hannWindow(uniform);
 
   const freqs = [], power = [];
@@ -6684,9 +6685,9 @@ function analyzeChestCapture(samples) {
   const peakiness = nearPeakPower / totalPower;
 
   if (peakiness < PEAKINESS_THRESHOLD) {
-    return { rate: null, peakiness, amp, peakBpm, quality: "noisy", reason: "no clear dominant breathing frequency (spectrum too spread out — likely motion or unstable lighting)" };
+    return { rate: null, peakiness, amp, peakBpm, quality: "noisy", reason: "no clear dominant breathing frequency (spectrum too spread out — likely motion or unstable lighting)", smoothSeries: smooth };
   }
-  return { rate: peakBpm, peakiness, amp, quality: "good", reason: "" };
+  return { rate: peakBpm, peakiness, amp, quality: "good", reason: "", smoothSeries: smooth };
 }
 
 // ---- Camera ----
@@ -6737,6 +6738,7 @@ function sampleRoiFrame() {
 }
 
 let trials = [];
+let traceRows = []; // accumulates across the whole session, like the raw-trace exports on Balance/STS/Blink-Rate
 $("b_captureBtn").addEventListener("click", () => {
   $("b_captureBtn").disabled = true;
   const durationMs = parseInt($("b_capDur").value, 10) * 1000;
@@ -6755,6 +6757,17 @@ $("b_captureBtn").addEventListener("click", () => {
         ? "Peakiness " + result.peakiness.toFixed(2) + " — clear dominant frequency found."
         : (result.reason || result.quality);
       diag("Capture done. rate=" + result.rate + " peakiness=" + result.peakiness + " amp=" + result.amp + " quality=" + result.quality + (result.reason ? " (" + result.reason + ")" : ""));
+      const trialNum = trials.length + 1;
+      const smoothSeries = result.smoothSeries; // same length/order as samples when present — the exact signal the amplitude/frequency analysis ran on
+      samples.forEach((s, i) => {
+        traceRows.push({
+          trial: trialNum,
+          t_ms: Math.round(s.t - t0),
+          raw_luminance: s.v.toFixed(3),
+          processed_signal: smoothSeries ? smoothSeries[i].v.toFixed(4) : ""
+        });
+      });
+      diag("Raw trace captured for trial " + trialNum + ". samples=" + samples.length);
       trials.push({ dur: durationMs / 1000, rate: result.rate, peakiness: result.peakiness, quality: result.quality, notes: "" });
       renderLog();
       $("b_captureBtn").disabled = false;
@@ -6791,6 +6804,18 @@ $("b_exportBtn").addEventListener("click", () => {
   a.download = `breath-camera-web-spike-results-v${APP_VERSION}-${PLATFORM}-${Date.now()}.csv`;
   a.click();
   diag("CSV exported. trials=" + trials.length);
+});
+
+$("b_exportTraceBtn").addEventListener("click", () => {
+  const header = ["trial","t_ms","raw_luminance","processed_signal"];
+  const rows = traceRows.map(r => [r.trial, r.t_ms, r.raw_luminance, r.processed_signal].join(","));
+  const csv = [header.join(","), ...rows].join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `breath-camera-raw-trace-v${APP_VERSION}-${PLATFORM}-${Date.now()}.csv`;
+  a.click();
+  diag("Raw trace exported. samples=" + traceRows.length);
 });
 
 </script>
@@ -8527,7 +8552,7 @@ const $ = (id) => document.getElementById(id);
 const blVideo = $("bl_video");
 const blFaceGuide = document.querySelector(".panel-blink .face-guide");
 
-const APP_VERSION = "1.1.0";
+const APP_VERSION = "1.2.0";
 function blDetectPlatform(ua) {
   if (/iPad|iPhone|iPod/.test(ua)) return "iOS";
   if (/Android/.test(ua)) return "Android";
@@ -8566,6 +8591,8 @@ let blDurS = 30;
 let blBlinkCount = 0;
 let blEyeState = "open"; // "open" | "closed"
 let blCloseStartT = null;
+let blSegStartT = null; // start of the current sub-blink segment within a closure (see BL_SPLIT_THRESH)
+let blSplitArmed = false; // true once the score has dipped to/below BL_SPLIT_THRESH mid-closure
 let blNoFaceMs = 0;
 let blNoFaceStreakMs = 0;
 let blLastFrameT = null;
@@ -8578,6 +8605,17 @@ const BL_CLOSE_THRESH = 0.5;
 const BL_OPEN_THRESH = 0.3;
 const BL_MIN_BLINK_MS = 50;
 const BL_MAX_BLINK_MS = 500;
+// A first real-device round (Build 14) showed rapid successive blinks getting
+// merged into one long "closure" and discarded whole: the score would rise
+// past BL_CLOSE_THRESH, dip back down close to (but not quite below)
+// BL_OPEN_THRESH, then rise past BL_CLOSE_THRESH again for the next blink —
+// repeatedly, in the raw trace, at dip values from ~0.31 to ~0.47. Rather
+// than wait for a full reopen (which never came until several blinks had
+// gone by), BL_SPLIT_THRESH marks that in-between dip as a real boundary
+// between two blinks: dip to/below it, then climb back to BL_CLOSE_THRESH
+// without ever fully reopening, and that's treated as "blink ended, next one
+// started" instead of one long non-blink closure.
+const BL_SPLIT_THRESH = 0.48;
 // Mid-blink tracking dropout: if the face is lost for longer than this while
 // we're in "closed" state, we abandon that closure rather than let a long
 // tracking gap masquerade as one very long "closure" that then gets rejected
@@ -8666,6 +8704,8 @@ $("bl_beginBtn").addEventListener("click", () => {
   blBlinkCount = 0;
   blEyeState = "open";
   blCloseStartT = null;
+  blSegStartT = null;
+  blSplitArmed = false;
   blNoFaceMs = 0;
   blNoFaceStreakMs = 0;
   blLastFrameT = performance.now();
@@ -8681,6 +8721,25 @@ $("bl_beginBtn").addEventListener("click", () => {
   // were ready) so the eye-guide circle stays live between trials too; we
   // just flip blRunning on and let it pick up the counting logic below.
 });
+
+// Evaluates one closed-eye segment (a full closure, or one sub-blink split
+// out of a longer closure) against the min/max blink-duration window, counts
+// it if it qualifies, and logs why not if it doesn't. Returns the trace event tag.
+function blEvaluateSegment(durMs, isSplit) {
+  const segNote = isSplit ? " segment (split from a longer closure)" : "";
+  if (durMs >= BL_MIN_BLINK_MS && durMs <= BL_MAX_BLINK_MS) {
+    blBlinkCount++;
+    $("bl_liveCount").innerHTML = blBlinkCount + ' <span class="unit">blinks</span>';
+    if (isSplit) blDiag("Rapid re-close detected mid-closure — counted as its own blink" + segNote + ": " + durMs.toFixed(0) + "ms");
+    return "blink";
+  } else if (durMs > BL_MAX_BLINK_MS) {
+    blDiag("Closure" + segNote + " ignored as non-blink (too long — likely a deliberate close, a stretch of lost tracking, or two blinks merged together): " + durMs.toFixed(0) + "ms");
+    return "reject_long";
+  } else {
+    blDiag("Closure" + segNote + " ignored as non-blink (too short — likely a tracking flicker): " + durMs.toFixed(0) + "ms");
+    return "reject_short";
+  }
+}
 
 function blLoop() {
   if (!blLoopActive) return;
@@ -8730,20 +8789,26 @@ function blLoop() {
       if (blEyeState === "open" && combined > BL_CLOSE_THRESH) {
         blEyeState = "closed";
         blCloseStartT = now;
+        blSegStartT = now;
+        blSplitArmed = false;
         event = "close";
-      } else if (blEyeState === "closed" && combined < BL_OPEN_THRESH) {
-        const closedMs = now - blCloseStartT;
-        blEyeState = "open";
-        if (closedMs >= BL_MIN_BLINK_MS && closedMs <= BL_MAX_BLINK_MS) {
-          blBlinkCount++;
-          $("bl_liveCount").innerHTML = blBlinkCount + ' <span class="unit">blinks</span>';
-          event = "blink";
-        } else if (closedMs > BL_MAX_BLINK_MS) {
-          event = "reject_long";
-          blDiag("Closure ignored as non-blink (too long — likely a deliberate close, a stretch of lost tracking, or two blinks merged together): " + closedMs.toFixed(0) + "ms");
-        } else {
-          event = "reject_short";
-          blDiag("Closure ignored as non-blink (too short — likely a tracking flicker): " + closedMs.toFixed(0) + "ms");
+      } else if (blEyeState === "closed") {
+        if (combined <= BL_SPLIT_THRESH) blSplitArmed = true;
+        if (blSplitArmed && combined >= BL_CLOSE_THRESH) {
+          // Score dipped near-open then climbed back to "closed" without ever
+          // fully reopening — that dip was the boundary between two blinks.
+          const segMs = now - blSegStartT;
+          event = blEvaluateSegment(segMs, true);
+          blSegStartT = now;
+          blSplitArmed = false;
+        } else if (combined < BL_OPEN_THRESH) {
+          const segMs = now - blSegStartT;
+          const wasSplit = blSegStartT !== blCloseStartT;
+          blEyeState = "open";
+          event = blEvaluateSegment(segMs, wasSplit);
+          blCloseStartT = null;
+          blSegStartT = null;
+          blSplitArmed = false;
         }
       }
     }
@@ -8754,6 +8819,8 @@ function blLoop() {
       if (blEyeState === "closed" && blNoFaceStreakMs > BL_FACE_DROPOUT_ABANDON_MS) {
         blEyeState = "open";
         blCloseStartT = null;
+        blSegStartT = null;
+        blSplitArmed = false;
         event = "dropout_abandon";
         blDiag("Face tracking lost mid-blink for >" + BL_FACE_DROPOUT_ABANDON_MS + "ms — that closure was abandoned, not counted either way.");
       }
