@@ -951,7 +951,7 @@ body.lightpanel { background: #ffffff; }
 </head>
 <body>
 
-<div id="buildBanner"><div class="inner" title="Build 18 · 2026-09-21 · Fixed the banner covering the back link on narrow screens; Chest Breathing Scan: Android exposure lock now pins actual converged values instead of trusting manual mode to remember them">Build 18 &middot; 2026-09-21 &middot; Fixed banner covering back link; Breathing Scan: Android exposure lock now pins actual converged values</div></div>
+<div id="buildBanner"><div class="inner" title="Build 19 · 2026-09-21 · Chest Breathing Scan: pinned ISO too (Android was still crashing dark), chest-framing box now derived from shoulder landmarks instead of a fixed box, added confidence/plausibility gating against non-human detections">Build 19 &middot; 2026-09-21 &middot; Breathing Scan: pinned ISO too, chest box now derived from shoulders, added confidence gating</div></div>
 
 <div class="page home-wrap" data-page="home">
 
@@ -6580,7 +6580,7 @@ const roiCanvas = $("b_roiCanvas");
 const roiCtx = roiCanvas.getContext("2d", { willReadFrequently: true });
 const roiGuideEl = document.querySelector(".panel-breath .roi-guide");
 
-const APP_VERSION = "1.4.0";
+const APP_VERSION = "1.5.0";
 const PLATFORM = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream ? "iOS"
   : /Android/.test(navigator.userAgent) ? "Android" : "Desktop";
 $("b_verPill").textContent = "v" + APP_VERSION + " · " + PLATFORM;
@@ -6754,6 +6754,19 @@ async function openCamera() {
 // already converged to (read from getSettings() right before locking,
 // clamped to the capability range) as part of the same constraint — pinning
 // the actual known-good values instead of hoping the driver keeps them.
+//
+// Round 3 (Build 19) found that fix was still incomplete: the raw trace still
+// showed the same hard, single-frame crash (~145 -> ~18 out of 255) a few
+// hundred ms into capture, on the same Android device, with exposureTime
+// pinned exactly as intended. The one exposure-relevant setting this device
+// reports that wasn't being pinned is ISO (present in track.getSettings() as
+// "iso" alongside exposureTime) — total exposure is exposureTime x ISO x
+// aperture, so pinning shutter speed alone while the driver's manual mode
+// silently resets ISO to its own default (plausibly a low one) would produce
+// exactly this: a correct exposureTime, and a dark frame anyway. iOS never
+// exercises this path at all (its track settings expose no exposureMode/iso
+// capability, so the exposureMode branch below never fires there). Fix: pin
+// ISO the same way exposureTime and colorTemperature already are.
 async function lockExposureForCapture() {
   const track = stream && stream.getVideoTracks()[0];
   if (!track) return;
@@ -6764,6 +6777,7 @@ async function lockExposureForCapture() {
   if (caps.exposureMode && caps.exposureMode.includes && caps.exposureMode.includes("manual")) {
     const c = { exposureMode: "manual" };
     if (settings.exposureTime != null && caps.exposureTime) c.exposureTime = clamp(settings.exposureTime, caps.exposureTime);
+    if (settings.iso != null && caps.iso) c.iso = clamp(settings.iso, caps.iso);
     advanced.push(c);
   }
   if (caps.whiteBalanceMode && caps.whiteBalanceMode.includes && caps.whiteBalanceMode.includes("manual")) {
@@ -6788,12 +6802,52 @@ async function lockExposureForCapture() {
 // just raw ROI brightness. Runs continuously once the camera is live (not
 // gated behind "Start Capture"), so framing feedback is available while
 // getting into position, the same way Blink-Rate's eye-guide is.
-// ROI is the same dashed-box region as the visual guide (10%-90% x, 16%-74% y
-// of the video frame — enlarged from the original 60%x40% box, which real
-// self-testing found too small to reliably capture the chest at front-camera
-// selfie distance) — sampled by drawing that crop into a small canvas.
-const ROI_X = 0.10, ROI_Y = 0.16, ROI_W = 0.80, ROI_H = 0.58;
+//
+// v1.4.0 used a fixed screen-relative box (10%-90% x, 16%-74% y of the video
+// frame) and only checked that both shoulder landmarks fell inside it. Round
+// 3 (Build 19) showed that's not what "framed" means at every distance/camera
+// combination: on a back-camera capture with the subject closer than the box
+// assumed, the fixed box's top edge (16% down) landed above the shoulders
+// entirely, so most of what it actually sampled was face/neck, not chest —
+// reported directly as "green line starts from nose... 75% of frame is face
+// and 25% is chest." A fixed box can't adapt to how close the subject is or
+// which camera is in use; it can only be right for one assumed framing.
+//
+// Fixed by deriving the box from the detected shoulders every frame instead
+// of assuming a fixed screen position: centered on the shoulder midpoint,
+// sized relative to shoulder-to-shoulder width (so it scales with how close
+// the subject is), and starting just below the shoulder line rather than
+// above it — targeting the chest/upper-torso area the shoulders actually
+// bound, on any camera, at any distance. The box is also frozen at the
+// moment "Capture" is pressed (not recomputed every capture-tick) so a
+// frame-to-frame tracking wobble mid-capture can't shift the sampled region,
+// the same freeze-a-baseline-once pattern Balance's calibration uses.
+//
+// Separately, the same round reported the pose model treating an inanimate
+// object (a rice pack, stood in for a person during back-camera self-testing)
+// as a detected human and letting a capture proceed against it. A lightweight
+// pose model has no object classifier — it will fit its skeleton to whatever
+// vaguely body-shaped thing is in frame, and no purely geometric check can
+// fully rule that out. Two real, if partial, mitigations added: (1) reject
+// landmarks below a visibility/confidence floor, since a genuine person's
+// shoulders are typically detected with high confidence and a spurious fit to
+// clutter often isn't; (2) reject an implausible shoulder-to-shoulder
+// distance (too narrow or too wide relative to the frame) as geometrically
+// unlikely to be a real torso at a normal capture distance. Neither is a
+// guarantee against a shape that happens to be roughly person-sized — flagged
+// as a known limitation of the model, not a closed issue.
 const POSE_LEFT_SHOULDER = 11, POSE_RIGHT_SHOULDER = 12;
+const SHOULDER_MIN_VISIBILITY = 0.5;
+const SHOULDER_DIST_MIN = 0.06, SHOULDER_DIST_MAX = 0.75; // implausible outside this range for a real torso in frame
+const CHEST_BOX_WIDTH_MULT = 2.6, CHEST_BOX_HEIGHT_MULT = 2.1;
+const CHEST_BOX_TOP_MARGIN_MULT = 0.15; // skip a sliver of neck right at the shoulder line
+const CHEST_BOX_CLIP_TOLERANCE = 0.02; // how far the natural box may exceed frame bounds before we call it "bad" instead of silently cropping
+// Fallback ROI used only if no confident chest box is available the instant
+// "Capture" is pressed (e.g. a brief tracking dropout) — the old fixed box,
+// kept as a safety net rather than blocking capture outright.
+const FALLBACK_ROI = { x: 0.10, y: 0.16, w: 0.80, h: 0.58 };
+
+let lastGoodChestBox = null; // raw (unmirrored) landmark-space {x,y,w,h}, updated whenever the guide is confidently "ok"
 
 async function initPoseModel() {
   $("b_poseModelPill").innerHTML = '<span class="pill wait">loading pose model</span>';
@@ -6812,22 +6866,56 @@ async function initPoseModel() {
   diag("PoseLandmarker model loaded.");
 }
 
-function pointInRoi(pt) {
-  if (!pt) return false;
-  // Front camera is CSS-mirrored (scaleX(-1)) for a natural selfie view;
-  // PoseLandmarker's coordinates come from the raw, unmirrored frame, so only
-  // flip x when the video is actually being displayed mirrored.
-  const mirrored = $("b_camMode").value === "user";
-  const x = mirrored ? 1 - pt.x : pt.x;
-  return x >= ROI_X && x <= ROI_X + ROI_W && pt.y >= ROI_Y && pt.y <= ROI_Y + ROI_H;
+// Computes the chest-sampling box from the two shoulder landmarks, in raw
+// (unmirrored) 0-1 landmark space. Returns null if the detection isn't
+// confident/plausible enough to trust, or {x,y,w,h,clipped} otherwise —
+// clipped=true means the natural box ran past the frame edge (subject too
+// close / off-center) and had to be cropped to fit, which the guide treats
+// as "not quite framed" rather than silently sampling a squashed box.
+function computeChestBox(lm) {
+  const ls = lm[POSE_LEFT_SHOULDER], rs = lm[POSE_RIGHT_SHOULDER];
+  if (!ls || !rs) return null;
+  if ((ls.visibility != null && ls.visibility < SHOULDER_MIN_VISIBILITY) ||
+      (rs.visibility != null && rs.visibility < SHOULDER_MIN_VISIBILITY)) return null;
+  const shoulderW = Math.abs(rs.x - ls.x);
+  if (shoulderW < SHOULDER_DIST_MIN || shoulderW > SHOULDER_DIST_MAX) return null;
+  const midX = (ls.x + rs.x) / 2;
+  const midY = (ls.y + rs.y) / 2;
+  const w = shoulderW * CHEST_BOX_WIDTH_MULT;
+  const h = shoulderW * CHEST_BOX_HEIGHT_MULT;
+  const x = midX - w / 2;
+  const y = midY + shoulderW * CHEST_BOX_TOP_MARGIN_MULT;
+  const clipped = (x < -CHEST_BOX_CLIP_TOLERANCE) || (x + w > 1 + CHEST_BOX_CLIP_TOLERANCE) ||
+                  (y < -CHEST_BOX_CLIP_TOLERANCE) || (y + h > 1 + CHEST_BOX_CLIP_TOLERANCE);
+  const cx = Math.max(0, Math.min(1 - w, x));
+  const cy = Math.max(0, Math.min(1 - h, y));
+  return { x: cx, y: cy, w, h, clipped };
 }
-function setRoiGuideState(ok) {
-  if (ok === roiGuideState) return;
+
+function setRoiGuideState(ok, box) {
+  if (ok === roiGuideState) {
+    if (ok === true && box) positionGuideEl(box);
+    return;
+  }
   roiGuideState = ok;
   if (!roiGuideEl) return;
   roiGuideEl.classList.remove("ok", "bad");
-  if (ok === true) roiGuideEl.classList.add("ok");
+  if (ok === true) { roiGuideEl.classList.add("ok"); if (box) positionGuideEl(box); }
   else if (ok === false) roiGuideEl.classList.add("bad");
+}
+// Moves/resizes the on-screen guide box to match the just-computed chest box.
+// The box itself is raw (unmirrored) landmark-space; the front camera's
+// video is CSS-mirrored for display (scaleX(-1)), so its on-screen left edge
+// has to be flipped to land in the right place — same mirroring rule
+// pointInRoi used to apply, now applied once here instead of per-point.
+function positionGuideEl(box) {
+  if (!roiGuideEl) return;
+  const mirrored = $("b_camMode").value === "user";
+  const left = mirrored ? (1 - (box.x + box.w)) : box.x;
+  roiGuideEl.style.left = (left * 100).toFixed(2) + "%";
+  roiGuideEl.style.top = (box.y * 100).toFixed(2) + "%";
+  roiGuideEl.style.width = (box.w * 100).toFixed(2) + "%";
+  roiGuideEl.style.height = (box.h * 100).toFixed(2) + "%";
 }
 function poseGuideLoop() {
   if (!poseLoopActive) return;
@@ -6835,8 +6923,13 @@ function poseGuideLoop() {
   if (!poseLandmarker || video.readyState < 2) return;
   const result = poseLandmarker.detectForVideo(video, performance.now());
   if (result.landmarks && result.landmarks.length > 0) {
-    const lm = result.landmarks[0];
-    setRoiGuideState(pointInRoi(lm[POSE_LEFT_SHOULDER]) && pointInRoi(lm[POSE_RIGHT_SHOULDER]));
+    const box = computeChestBox(result.landmarks[0]);
+    if (box && !box.clipped) {
+      lastGoodChestBox = box;
+      setRoiGuideState(true, box);
+    } else {
+      setRoiGuideState(false);
+    }
   } else {
     setRoiGuideState(null);
   }
@@ -6862,9 +6955,11 @@ $("b_camMode").addEventListener("change", async () => {
   catch (err) { diag("Camera switch failed: " + err.message); alert("Couldn't switch camera: " + err.message); }
 });
 
-function sampleRoiFrame() {
+// box is raw landmark-space {x,y,w,h} (fraction of the video frame) — the
+// same box the chest-framing guide computes, frozen for this whole capture.
+function sampleRoiFrame(box) {
   const vw = video.videoWidth || 480, vh = video.videoHeight || 640;
-  const sx = vw * ROI_X, sy = vh * ROI_Y, sw = vw * ROI_W, sh = vh * ROI_H;
+  const sx = vw * box.x, sy = vh * box.y, sw = vw * box.w, sh = vh * box.h;
   roiCtx.drawImage(video, sx, sy, sw, sh, 0, 0, 40, 40);
   const d = roiCtx.getImageData(0, 0, 40, 40).data;
   let sum = 0;
@@ -6877,6 +6972,15 @@ let traceRows = []; // accumulates across the whole session, like the raw-trace 
 $("b_captureBtn").addEventListener("click", async () => {
   $("b_captureBtn").disabled = true;
   await lockExposureForCapture();
+  // Freeze the chest box for the whole capture, rather than recomputing it
+  // every tick — a person's shoulders can wobble slightly frame to frame,
+  // and re-deriving the box each tick would let that wobble shift what's
+  // being sampled mid-capture. Falls back to the old fixed box only if no
+  // confident pose was available the instant Capture was pressed.
+  const captureBox = lastGoodChestBox || FALLBACK_ROI;
+  diag("Capture using " + (lastGoodChestBox ? "pose-derived" : "fallback fixed") + " chest box: " + JSON.stringify({
+    x: +captureBox.x.toFixed(3), y: +captureBox.y.toFixed(3), w: +captureBox.w.toFixed(3), h: +captureBox.h.toFixed(3)
+  }));
   const durationMs = parseInt($("b_capDur").value, 10) * 1000;
   const samples = [];
   const t0 = performance.now();
@@ -6884,7 +6988,7 @@ $("b_captureBtn").addEventListener("click", async () => {
   function tick() {
     const now = performance.now();
     const elapsed = now - t0;
-    samples.push({ t: now, v: sampleRoiFrame() });
+    samples.push({ t: now, v: sampleRoiFrame(captureBox) });
     timerEl.textContent = Math.max(0, (durationMs - elapsed) / 1000).toFixed(1) + "s";
     if (elapsed >= durationMs) {
       const result = analyzeChestCapture(samples);
