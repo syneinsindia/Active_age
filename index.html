@@ -951,7 +951,7 @@ body.lightpanel { background: #ffffff; }
 </head>
 <body>
 
-<div id="buildBanner"><div class="inner" title="Build 21 · 2026-09-21 · Chest Breathing Scan: found the real bug behind the guide box moving around and never turning green — it was drawing raw camera-frame coordinates directly onto a cropped portrait preview instead of mapping between the two">Build 21 &middot; 2026-09-21 &middot; Breathing Scan: framing guide now correctly maps raw camera coordinates onto the cropped preview</div></div>
+<div id="buildBanner"><div class="inner" title="Build 22 · 2026-09-21 · Chest Breathing Scan: added a diagnostics log explaining exactly why the framing guide isn't confirming framed — no landmarks, low shoulder visibility, implausible shoulder distance, or too clipped, with the numbers behind whichever one it is — so a not-yet-understood case like Round 6's front-camera miss can be diagnosed from data instead of guessed at">Build 22 &middot; 2026-09-21 &middot; Breathing Scan: added a diagnostics log explaining exactly why the framing guide isn't confirming framed</div></div>
 
 <div class="page home-wrap" data-page="home">
 
@@ -6580,7 +6580,7 @@ const roiCanvas = $("b_roiCanvas");
 const roiCtx = roiCanvas.getContext("2d", { willReadFrequently: true });
 const roiGuideEl = document.querySelector(".panel-breath .roi-guide");
 
-const APP_VERSION = "1.7.0";
+const APP_VERSION = "1.8.0";
 const PLATFORM = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream ? "iOS"
   : /Android/.test(navigator.userAgent) ? "Android" : "Desktop";
 $("b_verPill").textContent = "v" + APP_VERSION + " · " + PLATFORM;
@@ -6962,22 +6962,33 @@ function rawToDisplayFraction(video, rawX, rawY) {
   return { x: rawX, y: rawY };
 }
 
-// Computes the chest box from the two shoulder landmarks. Returns null if
-// the detection isn't confident/plausible enough to trust, or
-// {raw, display, clipped} otherwise: `raw` is the box in raw (unmirrored)
+// Computes the chest box from the two shoulder landmarks. Always returns an
+// object with `ok` (true only when the box is confident, plausible, and not
+// too clipped) and `reason` (why not, when ok is false) — Round 6 found a
+// front-camera trial that fell back to the fixed box with no complaint and
+// nothing in the diagnostics to explain why, so every rejection now carries
+// its specific reason and the numbers behind it, the same
+// log-the-mechanism-not-just-the-outcome instinct Balance's trigger-magnitude
+// diagnostics were built on. `raw`/`display` are only present once a box
+// could actually be geometrically formed (i.e. shoulders were found and
+// passed the visibility/plausibility checks): `raw` is in raw (unmirrored)
 // video-frame fraction space, for sampleRoiFrame() to sample real pixels
 // from; `display` is that same box projected into the visible, cropped
-// preview's fraction space, for the on-screen guide. `clipped`=true means
-// more than CHEST_BOX_MAX_CLIP_FRACTION of the box (measured in DISPLAY
-// space, i.e. from what the person can actually see and adjust) falls
-// outside the visible preview — a smaller overrun is accepted and clamped.
+// preview's fraction space (see rawToDisplayFraction above), for the
+// on-screen guide. A box can be geometrically valid but still rejected
+// (reason "too_clipped") when more than CHEST_BOX_MAX_CLIP_FRACTION of it
+// falls outside the visible preview.
 function computeChestBox(lm, video) {
   const ls = lm[POSE_LEFT_SHOULDER], rs = lm[POSE_RIGHT_SHOULDER];
-  if (!ls || !rs) return null;
+  if (!ls || !rs) return { ok: false, reason: "no_shoulder_landmarks" };
   if ((ls.visibility != null && ls.visibility < SHOULDER_MIN_VISIBILITY) ||
-      (rs.visibility != null && rs.visibility < SHOULDER_MIN_VISIBILITY)) return null;
+      (rs.visibility != null && rs.visibility < SHOULDER_MIN_VISIBILITY)) {
+    return { ok: false, reason: "low_shoulder_visibility", leftVis: ls.visibility, rightVis: rs.visibility };
+  }
   const shoulderW = Math.abs(rs.x - ls.x);
-  if (shoulderW < SHOULDER_DIST_MIN || shoulderW > SHOULDER_DIST_MAX) return null;
+  if (shoulderW < SHOULDER_DIST_MIN || shoulderW > SHOULDER_DIST_MAX) {
+    return { ok: false, reason: "implausible_shoulder_distance", shoulderW };
+  }
   const midX = (ls.x + rs.x) / 2;
   const midY = (ls.y + rs.y) / 2;
   const w = shoulderW * CHEST_BOX_WIDTH_MULT;
@@ -7003,19 +7014,45 @@ function computeChestBox(lm, video) {
   const overlapH = Math.max(0, Math.min(dy + dh, 1) - Math.max(dy, 0));
   const naturalArea = dw * dh;
   const clipFraction = naturalArea > 0 ? 1 - (overlapW * overlapH) / naturalArea : 1;
-  const clipped = clipFraction > CHEST_BOX_MAX_CLIP_FRACTION;
   const cdw = Math.min(Math.max(dw, 0), 1), cdh = Math.min(Math.max(dh, 0), 1);
   let cdx = dx, cdy = dy;
   if (cdx < 0) cdx = 0;
   if (cdx + cdw > 1) cdx = 1 - cdw;
   if (cdy < 0) cdy = 0;
   if (cdy + cdh > 1) cdy = 1 - cdh;
+  const raw = { x: rx, y: ry, w: rw, h: rh };
+  const display = { x: cdx, y: cdy, w: cdw, h: cdh };
 
-  return {
-    raw: { x: rx, y: ry, w: rw, h: rh },
-    display: { x: cdx, y: cdy, w: cdw, h: cdh },
-    clipped
-  };
+  if (clipFraction > CHEST_BOX_MAX_CLIP_FRACTION) {
+    return { ok: false, reason: "too_clipped", clipFraction, raw, display };
+  }
+  return { ok: true, reason: "ok", clipFraction, raw, display };
+}
+
+// Logs why the guide is (or isn't) confirming "framed," throttled to once
+// per second per reason so a long stretch of the same rejection doesn't bury
+// the diagnostics the way Balance's unthrottled "tracking lost" logging once
+// did — but every *change* in reason logs immediately, since that's exactly
+// the transition worth seeing.
+let lastGuideDiagReason = null;
+let lastGuideDiagTime = 0;
+function logGuideReasonThrottled(box) {
+  const now = performance.now();
+  const reason = box.ok ? "ok" : box.reason;
+  if (reason === lastGuideDiagReason && now - lastGuideDiagTime < 1000) return;
+  let detail = "";
+  if (reason === "low_shoulder_visibility") {
+    detail = ` (leftVis=${box.leftVis != null ? box.leftVis.toFixed(2) : "?"}, rightVis=${box.rightVis != null ? box.rightVis.toFixed(2) : "?"}, min=${SHOULDER_MIN_VISIBILITY})`;
+  } else if (reason === "implausible_shoulder_distance") {
+    detail = ` (shoulderW=${box.shoulderW.toFixed(3)}, range=${SHOULDER_DIST_MIN}-${SHOULDER_DIST_MAX})`;
+  } else if (reason === "too_clipped") {
+    detail = ` (clipFraction=${box.clipFraction.toFixed(2)}, max=${CHEST_BOX_MAX_CLIP_FRACTION})`;
+  } else if (reason === "ok") {
+    detail = ` (clipFraction=${box.clipFraction.toFixed(2)})`;
+  }
+  diag("Guide state: " + reason + detail);
+  lastGuideDiagReason = reason;
+  lastGuideDiagTime = now;
 }
 
 function setRoiGuideState(ok, box) {
@@ -7050,13 +7087,15 @@ function poseGuideLoop() {
   const result = poseLandmarker.detectForVideo(video, performance.now());
   if (result.landmarks && result.landmarks.length > 0) {
     const box = computeChestBox(result.landmarks[0], video);
-    if (box && !box.clipped) {
+    logGuideReasonThrottled(box);
+    if (box.ok) {
       lastGoodChestBox = box.raw;
       setRoiGuideState(true, box.display);
     } else {
       setRoiGuideState(false);
     }
   } else {
+    logGuideReasonThrottled({ ok: false, reason: "no_person_detected" });
     setRoiGuideState(null);
   }
 }
