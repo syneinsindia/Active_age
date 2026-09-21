@@ -682,9 +682,13 @@ body.lightpanel { background: #ffffff; }
 .panel-breath .video-wrap video { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }
 .panel-breath .video-wrap video.mirrored { transform: scaleX(-1); }
 .panel-breath .roi-guide { position: absolute; border: 2px dashed rgba(255,255,255,0.85); border-radius: 8px;
-    left: 20%; top: 30%; width: 60%; height: 40%; pointer-events: none; }
+    left: 10%; top: 16%; width: 80%; height: 58%; pointer-events: none; transition: border-color 0.15s ease; }
 .panel-breath .roi-guide::after { content: "frame your chest here"; position: absolute; bottom: -20px; left: 0; right: 0;
     text-align: center; color: #fff; font-size: 0.7rem; text-shadow: 0 1px 2px rgba(0,0,0,0.7); }
+.panel-breath .roi-guide.ok { border-style: solid; border-color: #34c759; }
+.panel-breath .roi-guide.ok::after { content: "good — hold there"; }
+.panel-breath .roi-guide.bad { border-style: solid; border-color: #ff3b30; }
+.panel-breath .roi-guide.bad::after { content: "move so your chest fills the box"; }
 .panel-breath .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 0.72rem; font-weight: 600; }
 .panel-breath .pill.ok { background: #e2f0e6; color: #2f6f4f; }
 .panel-breath .pill.bad { background: #f7e3da; color: var(--warn); }
@@ -938,7 +942,7 @@ body.lightpanel { background: #ffffff; }
 </head>
 <body>
 
-<div id="buildBanner"><div class="inner">Build 16 &middot; 2026-09-21 &middot; Chest Breathing Scan (#breath): added raw luminance trace export ahead of its first real-device round</div></div>
+<div id="buildBanner"><div class="inner">Build 17 &middot; 2026-09-21 &middot; Chest Breathing Scan: fixed Android under-exposure (exposure lock was firing too early) and broken camera switching, enlarged the frame guide, added a real green/red pose-tracked framing check</div></div>
 
 <div class="page home-wrap" data-page="home">
 
@@ -1837,7 +1841,8 @@ body.lightpanel { background: #ffffff; }
   </div>
   <canvas id="b_roiCanvas" width="40" height="40"></canvas>
   <button id="b_startCameraBtn" class="btn-secondary">Start Camera</button>
-  <p class="hint">Prop the phone 40-60cm away so your chest/upper torso fills the dashed guide. Sit or lie back so you're not moving other than breathing. Loose baggy clothing gives a weaker signal than a closer-fitting top.</p>
+  <span id="b_poseModelPill" class="pill wait"></span>
+  <p class="hint">Prop the phone so your chest/upper torso fills the dashed guide — for a self-test with the front camera that's usually closer than 40-60cm (more like arm's length), since there's no helper to stand it back further. The guide turns green when your shoulders are framed inside it, red when they're not. Sit or lie back so you're not moving other than breathing. Loose baggy clothing gives a weaker signal than a closer-fitting top. You can switch camera at any time — it reopens with the new one.</p>
 </section>
 
 <section>
@@ -6558,12 +6563,15 @@ $("sm_exportBtn").addEventListener("click", () => {
 
 <script type="module">
 
+import { PoseLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
+
 const $ = (id) => document.getElementById(id);
 const video = $("b_video");
 const roiCanvas = $("b_roiCanvas");
 const roiCtx = roiCanvas.getContext("2d", { willReadFrequently: true });
+const roiGuideEl = document.querySelector(".panel-breath .roi-guide");
 
-const APP_VERSION = "1.1.0";
+const APP_VERSION = "1.3.0";
 const PLATFORM = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream ? "iOS"
   : /Android/.test(navigator.userAgent) ? "Android" : "Desktop";
 $("b_verPill").textContent = "v" + APP_VERSION + " · " + PLATFORM;
@@ -6692,7 +6700,21 @@ function analyzeChestCapture(samples) {
 
 // ---- Camera ----
 let stream = null;
+let poseLandmarker = null;
+let poseLoopActive = false;
+let roiGuideState = null; // null (unknown) | true (shoulders framed) | false
 
+// A first real-device round (Build 16) found this camera badly underexposed
+// on Android specifically, while the exact same phone/camera worked fine for
+// every other camera-based tool in this app — the difference traced to this
+// tool alone locking exposure/white-balance into "manual" the instant the
+// camera opens, before the person has actually gotten into frame. That
+// freezes whatever auto-exposure the camera happened to land on in its first
+// ~1 second (which, on Android, hadn't converged to anything close to a
+// properly-lit chest yet) for the entire capture. Fixed by no longer locking
+// on open at all — the lock now happens in lockExposureForCapture(), called
+// right before each capture starts, by which point the person has already
+// framed themselves in the guide and the camera's had time to converge.
 async function openCamera() {
   if (stream) stream.getTracks().forEach(t => t.stop());
   const facing = $("b_camMode").value;
@@ -6705,31 +6727,107 @@ async function openCamera() {
   video.srcObject = stream;
   await video.play();
   const track = stream.getVideoTracks()[0];
-  if (track) {
-    diag("Camera opened. Track settings: " + JSON.stringify(track.getSettings ? track.getSettings() : {}));
-    const caps = track.getCapabilities ? track.getCapabilities() : {};
-    const advanced = [];
-    if (caps.exposureMode && caps.exposureMode.includes && caps.exposureMode.includes("manual")) advanced.push({ exposureMode: "manual" });
-    if (caps.whiteBalanceMode && caps.whiteBalanceMode.includes && caps.whiteBalanceMode.includes("manual")) advanced.push({ whiteBalanceMode: "manual" });
-    if (advanced.length) {
-      try { await track.applyConstraints({ advanced }); diag("Exposure/white-balance locked."); }
-      catch (err) { diag("Lock constraint rejected: " + err.name); }
-    } else {
-      diag("No manual exposure/white-balance control available on this browser — relying on stable room lighting.");
-    }
-  }
+  if (track) diag("Camera opened. Track settings: " + JSON.stringify(track.getSettings ? track.getSettings() : {}));
   $("b_captureBtn").disabled = false;
 }
+async function lockExposureForCapture() {
+  const track = stream && stream.getVideoTracks()[0];
+  if (!track) return;
+  const caps = track.getCapabilities ? track.getCapabilities() : {};
+  const advanced = [];
+  if (caps.exposureMode && caps.exposureMode.includes && caps.exposureMode.includes("manual")) advanced.push({ exposureMode: "manual" });
+  if (caps.whiteBalanceMode && caps.whiteBalanceMode.includes && caps.whiteBalanceMode.includes("manual")) advanced.push({ whiteBalanceMode: "manual" });
+  if (advanced.length) {
+    try { await track.applyConstraints({ advanced }); diag("Exposure/white-balance locked for capture."); }
+    catch (err) { diag("Lock constraint rejected: " + err.name); }
+  } else {
+    diag("No manual exposure/white-balance control available on this browser — relying on stable room lighting.");
+  }
+}
+// ---- Chest-framing guide (green/red), added after a real round found the
+// dashed box gave no feedback on whether framing was actually good. Uses the
+// same PoseLandmarker/tasks-vision model Balance, Gait Speed, and ROM already
+// run — a first for this tool, which until now ran no tracking model at all,
+// just raw ROI brightness. Runs continuously once the camera is live (not
+// gated behind "Start Capture"), so framing feedback is available while
+// getting into position, the same way Blink-Rate's eye-guide is.
+// ROI is the same dashed-box region as the visual guide (10%-90% x, 16%-74% y
+// of the video frame — enlarged from the original 60%x40% box, which real
+// self-testing found too small to reliably capture the chest at front-camera
+// selfie distance) — sampled by drawing that crop into a small canvas.
+const ROI_X = 0.10, ROI_Y = 0.16, ROI_W = 0.80, ROI_H = 0.58;
+const POSE_LEFT_SHOULDER = 11, POSE_RIGHT_SHOULDER = 12;
+
+async function initPoseModel() {
+  $("b_poseModelPill").innerHTML = '<span class="pill wait">loading pose model</span>';
+  const fileset = await FilesetResolver.forVisionTasks(
+    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
+  );
+  poseLandmarker = await PoseLandmarker.createFromOptions(fileset, {
+    baseOptions: {
+      modelAssetPath: "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
+      delegate: "GPU"
+    },
+    runningMode: "VIDEO",
+    numPoses: 1
+  });
+  $("b_poseModelPill").innerHTML = '<span class="pill ok">pose ready</span>';
+  diag("PoseLandmarker model loaded.");
+}
+
+function pointInRoi(pt) {
+  if (!pt) return false;
+  // Front camera is CSS-mirrored (scaleX(-1)) for a natural selfie view;
+  // PoseLandmarker's coordinates come from the raw, unmirrored frame, so only
+  // flip x when the video is actually being displayed mirrored.
+  const mirrored = $("b_camMode").value === "user";
+  const x = mirrored ? 1 - pt.x : pt.x;
+  return x >= ROI_X && x <= ROI_X + ROI_W && pt.y >= ROI_Y && pt.y <= ROI_Y + ROI_H;
+}
+function setRoiGuideState(ok) {
+  if (ok === roiGuideState) return;
+  roiGuideState = ok;
+  if (!roiGuideEl) return;
+  roiGuideEl.classList.remove("ok", "bad");
+  if (ok === true) roiGuideEl.classList.add("ok");
+  else if (ok === false) roiGuideEl.classList.add("bad");
+}
+function poseGuideLoop() {
+  if (!poseLoopActive) return;
+  requestAnimationFrame(poseGuideLoop);
+  if (!poseLandmarker || video.readyState < 2) return;
+  const result = poseLandmarker.detectForVideo(video, performance.now());
+  if (result.landmarks && result.landmarks.length > 0) {
+    const lm = result.landmarks[0];
+    setRoiGuideState(pointInRoi(lm[POSE_LEFT_SHOULDER]) && pointInRoi(lm[POSE_RIGHT_SHOULDER]));
+  } else {
+    setRoiGuideState(null);
+  }
+}
+
 $("b_startCameraBtn").addEventListener("click", async () => {
-  try { await openCamera(); $("b_startCameraBtn").disabled = true; }
+  try {
+    await openCamera();
+    if (!poseLandmarker) await initPoseModel();
+    poseLoopActive = true;
+    poseGuideLoop();
+  }
   catch (err) { diag("Camera open failed: " + err.message); alert("Couldn't open the camera: " + err.message); }
 });
+// Camera was a fixed dropdown with no way to act on a change — picking "Rear
+// camera" after the front camera was already open did nothing (this is the
+// "rear camera switching was not working" bug). The dropdown now reopens the
+// camera with the newly-selected facing mode any time it's changed.
+$("b_camMode").addEventListener("change", async () => {
+  if (!stream) return; // camera not started yet — the next "Start Camera" tap will use the new value
+  diag("Camera selection changed to facingMode=" + $("b_camMode").value + " — reopening.");
+  try { await openCamera(); }
+  catch (err) { diag("Camera switch failed: " + err.message); alert("Couldn't switch camera: " + err.message); }
+});
 
-// ROI is the same dashed-box region as the visual guide (20%-80% x, 30%-70% y
-// of the video frame) — sampled by drawing that crop into a small canvas.
 function sampleRoiFrame() {
   const vw = video.videoWidth || 480, vh = video.videoHeight || 640;
-  const sx = vw * 0.20, sy = vh * 0.30, sw = vw * 0.60, sh = vh * 0.40;
+  const sx = vw * ROI_X, sy = vh * ROI_Y, sw = vw * ROI_W, sh = vh * ROI_H;
   roiCtx.drawImage(video, sx, sy, sw, sh, 0, 0, 40, 40);
   const d = roiCtx.getImageData(0, 0, 40, 40).data;
   let sum = 0;
@@ -6739,8 +6837,9 @@ function sampleRoiFrame() {
 
 let trials = [];
 let traceRows = []; // accumulates across the whole session, like the raw-trace exports on Balance/STS/Blink-Rate
-$("b_captureBtn").addEventListener("click", () => {
+$("b_captureBtn").addEventListener("click", async () => {
   $("b_captureBtn").disabled = true;
+  await lockExposureForCapture();
   const durationMs = parseInt($("b_capDur").value, 10) * 1000;
   const samples = [];
   const t0 = performance.now();
