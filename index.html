@@ -84,6 +84,15 @@ body.lightpanel { background: #ffffff; }
   padding: 4px 8px; text-align: center;
   font: 600 10.5px/1.3 ui-monospace, 'SF Mono', Menlo, monospace;
   color: #9fe0a8; letter-spacing: .01em;
+  /* Build notes have gotten longer than a narrow phone screen can fit on one
+     line, and this banner is fixed-position with a fixed height reserved in
+     body's padding-top — an unclipped wrap grows the banner past that
+     reserved gap and covers the page's own top content (the "All tests"
+     back-link, first thing in every panel). Force one line + ellipsis so the
+     banner's height can never exceed what's reserved for it, regardless of
+     how long a future build note is; the full text is still there in the
+     DOM/title for anyone who inspects it. */
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .panel-gait h1 { font-size: 1.15rem; margin: 0 0 4px; }
 .panel-gait .sub { color: var(--muted); font-size: 0.85rem; margin: 0 0 16px; line-height: 1.4; }
@@ -942,7 +951,7 @@ body.lightpanel { background: #ffffff; }
 </head>
 <body>
 
-<div id="buildBanner"><div class="inner">Build 17 &middot; 2026-09-21 &middot; Chest Breathing Scan: fixed Android under-exposure (exposure lock was firing too early) and broken camera switching, enlarged the frame guide, added a real green/red pose-tracked framing check</div></div>
+<div id="buildBanner"><div class="inner" title="Build 18 · 2026-09-21 · Fixed the banner covering the back link on narrow screens; Chest Breathing Scan: Android exposure lock now pins actual converged values instead of trusting manual mode to remember them">Build 18 &middot; 2026-09-21 &middot; Fixed banner covering back link; Breathing Scan: Android exposure lock now pins actual converged values</div></div>
 
 <div class="page home-wrap" data-page="home">
 
@@ -6571,7 +6580,7 @@ const roiCanvas = $("b_roiCanvas");
 const roiCtx = roiCanvas.getContext("2d", { willReadFrequently: true });
 const roiGuideEl = document.querySelector(".panel-breath .roi-guide");
 
-const APP_VERSION = "1.3.0";
+const APP_VERSION = "1.4.0";
 const PLATFORM = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream ? "iOS"
   : /Android/.test(navigator.userAgent) ? "Android" : "Desktop";
 $("b_verPill").textContent = "v" + APP_VERSION + " · " + PLATFORM;
@@ -6730,15 +6739,43 @@ async function openCamera() {
   if (track) diag("Camera opened. Track settings: " + JSON.stringify(track.getSettings ? track.getSettings() : {}));
   $("b_captureBtn").disabled = false;
 }
+// Build 17 delayed this lock from camera-open to just-before-capture, on the
+// theory that "manual" was freezing an auto-exposure value that hadn't
+// converged yet. Round 2's raw trace disproved that: on Android, luminance
+// stayed bright (~146/255) for the first ~400ms of capture — AFTER the delay
+// fix, well past convergence — then dropped hard to ~20/255 the moment the
+// lock actually took effect, and stayed pinned there for the rest of that
+// trial and all of the next one. So delay wasn't the problem: engaging
+// exposureMode:"manual" on this device doesn't freeze the current (good)
+// auto-exposure at all — it snaps to some other, much darker manual default.
+// iOS doesn't show this because the same call there evidently does preserve
+// the current value. Fix: stop trusting "manual" to remember anything, and
+// instead explicitly pass the exposureTime/colorTemperature the camera had
+// already converged to (read from getSettings() right before locking,
+// clamped to the capability range) as part of the same constraint — pinning
+// the actual known-good values instead of hoping the driver keeps them.
 async function lockExposureForCapture() {
   const track = stream && stream.getVideoTracks()[0];
   if (!track) return;
   const caps = track.getCapabilities ? track.getCapabilities() : {};
+  const settings = track.getSettings ? track.getSettings() : {};
   const advanced = [];
-  if (caps.exposureMode && caps.exposureMode.includes && caps.exposureMode.includes("manual")) advanced.push({ exposureMode: "manual" });
-  if (caps.whiteBalanceMode && caps.whiteBalanceMode.includes && caps.whiteBalanceMode.includes("manual")) advanced.push({ whiteBalanceMode: "manual" });
+  const clamp = (v, range) => (range && range.min != null && range.max != null) ? Math.min(range.max, Math.max(range.min, v)) : v;
+  if (caps.exposureMode && caps.exposureMode.includes && caps.exposureMode.includes("manual")) {
+    const c = { exposureMode: "manual" };
+    if (settings.exposureTime != null && caps.exposureTime) c.exposureTime = clamp(settings.exposureTime, caps.exposureTime);
+    advanced.push(c);
+  }
+  if (caps.whiteBalanceMode && caps.whiteBalanceMode.includes && caps.whiteBalanceMode.includes("manual")) {
+    const c = { whiteBalanceMode: "manual" };
+    if (settings.colorTemperature != null && caps.colorTemperature) c.colorTemperature = clamp(settings.colorTemperature, caps.colorTemperature);
+    advanced.push(c);
+  }
   if (advanced.length) {
-    try { await track.applyConstraints({ advanced }); diag("Exposure/white-balance locked for capture."); }
+    try {
+      await track.applyConstraints({ advanced });
+      diag("Exposure/white-balance locked for capture. Pinned values: " + JSON.stringify(advanced));
+    }
     catch (err) { diag("Lock constraint rejected: " + err.name); }
   } else {
     diag("No manual exposure/white-balance control available on this browser — relying on stable room lighting.");
