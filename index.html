@@ -951,7 +951,7 @@ body.lightpanel { background: #ffffff; }
 </head>
 <body>
 
-<div id="buildBanner"><div class="inner" title="Build 25 · 2026-09-21 · Workspace consolidation: verified (script-diff, ID-prefix-stripped, byte-identical) and deleted the last 8 stale standalone spike files — recovery-check, submaximal-fitness, walk-endurance, heart-breath-signal, heart-rate-sqi-fft, lung-capacity, rom, and track1-gait-speed — that had been sitting alongside their already-merged panels here since before this file existed. Every one of the 14 tests now lives only in index.html; no code in any panel changed">Build 25 &middot; 2026-09-21 &middot; Workspace consolidation: deleted the last 8 stale standalone spike files — every test now lives only in this one file</div></div>
+<div id="buildBanner"><div class="inner" title="Build 26 · 2026-09-21 · Chest Breathing Camera (breath panel, v1.11.0): a real-device test found the rear camera would lock onto and capture someone's BACK as if it were their chest — MediaPipe's shoulder landmarks look geometrically similar from either side, and nothing checked orientation. Added a nose-visibility gate (new face_not_visible rejection reason): the guide now also requires the nose landmark to be confidently visible, which should be near-zero when facing away and still visible for the tool's legitimate rear-camera-with-helper use case. Reasoned from how the pose model works, not yet confirmed by a real-device round — needs testing both the case this should now reject (back of torso) and the case it must still accept (helper pointing the phone at someone else's front)">Build 26 &middot; 2026-09-21 &middot; Breath: added a nose-visibility check so the rear camera no longer mistakes someone's back for their chest — unconfirmed, needs a real-device retest</div></div>
 
 <div class="page home-wrap" data-page="home">
 
@@ -6580,7 +6580,7 @@ const roiCanvas = $("b_roiCanvas");
 const roiCtx = roiCanvas.getContext("2d", { willReadFrequently: true });
 const roiGuideEl = document.querySelector(".panel-breath .roi-guide");
 
-const APP_VERSION = "1.10.0";
+const APP_VERSION = "1.11.0"; // 1.11.0 (Round 11/Build 26): added a nose-visibility orientation gate so a rear camera pointed at someone's back is no longer accepted as a chest
 const PLATFORM = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream ? "iOS"
   : /Android/.test(navigator.userAgent) ? "Android" : "Desktop";
 $("b_verPill").textContent = "v" + APP_VERSION + " · " + PLATFORM;
@@ -6863,7 +6863,30 @@ async function lockExposureForCapture() {
 // guarantee against a shape that happens to be roughly person-sized — flagged
 // as a known limitation of the model, not a closed issue.
 const POSE_LEFT_SHOULDER = 11, POSE_RIGHT_SHOULDER = 12;
+const POSE_NOSE = 0;
 const SHOULDER_MIN_VISIBILITY = 0.5;
+// Round 11 (Build 26): a real-device test pointed the REAR camera at
+// someone's BACK, not their chest, and the guide still confidently locked
+// and captured — confirmed in both the Android and iOS diagnostics
+// ("Capture using pose-derived chest box" fired on those trials with normal-
+// looking box coordinates). The mechanism is different from every prior
+// round's bug: this isn't a framing/exposure defect, it's that
+// computeChestBox() never checked orientation at all. MediaPipe's Pose
+// Landmarker tracks shoulder positions (11, 12) the same way regardless of
+// which way the torso faces — a skeleton fit from the back looks
+// geometrically almost identical to one from the front, so a well-framed
+// back passed every existing check. Fixed by also requiring the nose
+// landmark (0) to be visible: its visibility score should be near-zero when
+// the back of someone's head faces the camera (there's no face there to
+// detect), while it stays confidently visible for this tool's actual
+// intended rear-camera use case — a helper holding the phone up to someone
+// else's front. Unlike prior fixes, this is reasoned from how the pose model
+// works, not confirmed from diagnostics data (the logs can't tell front from
+// back on their own) — flagged for a confirmatory real-device round that
+// tries both the case this should now reject (rear camera on someone's back)
+// and the case it must keep accepting (rear camera, helper, someone else's
+// front).
+const NOSE_MIN_VISIBILITY = 0.5; // mirrors SHOULDER_MIN_VISIBILITY's threshold; a face-on nose should read confidently above this, a facing-away one near zero
 const SHOULDER_DIST_MIN = 0.06, SHOULDER_DIST_MAX = 0.90; // implausible outside this range for a real torso in frame — raised from 0.75 in Round 7/Build 23, see note below
 const CHEST_BOX_WIDTH_MULT = 2.2, CHEST_BOX_HEIGHT_MULT = 1.8;
 const CHEST_BOX_TOP_MARGIN_MULT = 0.15; // skip a sliver of neck right at the shoulder line
@@ -7040,6 +7063,13 @@ function computeChestBox(lm, video) {
       (rs.visibility != null && rs.visibility < SHOULDER_MIN_VISIBILITY)) {
     return { ok: false, reason: "low_shoulder_visibility", leftVis: ls.visibility, rightVis: rs.visibility };
   }
+  // Round 11/Build 26: shoulders alone can't tell front from back — see the
+  // note above the constants. Require the nose to be visible too, as a
+  // face-presence/orientation gate.
+  const nose = lm[POSE_NOSE];
+  if (!nose || nose.visibility == null || nose.visibility < NOSE_MIN_VISIBILITY) {
+    return { ok: false, reason: "face_not_visible", noseVis: nose ? nose.visibility : null };
+  }
   const shoulderW = Math.abs(rs.x - ls.x);
   if (shoulderW < SHOULDER_DIST_MIN || shoulderW > SHOULDER_DIST_MAX) {
     return { ok: false, reason: "implausible_shoulder_distance", shoulderW };
@@ -7117,6 +7147,8 @@ function logGuideReasonThrottled(box) {
   let detail = "";
   if (reason === "low_shoulder_visibility") {
     detail = ` (leftVis=${box.leftVis != null ? box.leftVis.toFixed(2) : "?"}, rightVis=${box.rightVis != null ? box.rightVis.toFixed(2) : "?"}, min=${SHOULDER_MIN_VISIBILITY})`;
+  } else if (reason === "face_not_visible") {
+    detail = ` (noseVis=${box.noseVis != null ? box.noseVis.toFixed(2) : "?"}, min=${NOSE_MIN_VISIBILITY} — likely facing away from the camera)`;
   } else if (reason === "implausible_shoulder_distance") {
     detail = ` (shoulderW=${box.shoulderW.toFixed(3)}, range=${SHOULDER_DIST_MIN}-${SHOULDER_DIST_MAX})`;
   } else if (reason === "too_clipped") {
