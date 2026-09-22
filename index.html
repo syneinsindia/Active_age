@@ -951,7 +951,7 @@ body.lightpanel { background: #ffffff; }
 </head>
 <body>
 
-<div id="buildBanner"><div class="inner" title="Build 30 · 2026-09-22 · Chest Breathing Camera (breath panel, v1.15.0): fixed Build 29's distance voice feature being effectively inaudible on a real device — real pose-tracking noise flickers the guide reason several times a second while getting into position, and the old logic reset and re-spoke (cancelling the prior utterance) on every flicker back to bad, so nothing coherent ever got said. Now requires about 400ms of continuous bad-distance reading before speaking, and throttles by direction (too-close/too-far) instead of resetting on brief good blips. No detection, framing, or signal-analysis logic changed.">Build 30 &middot; 2026-09-22 &middot; Breath: fixed the distance voice cue not actually being heard on a real device (was getting cancelled by its own flicker)</div></div>
+<div id="buildBanner"><div class="inner" title="Build 31 · 2026-09-22 · Chest Breathing Camera (breath panel, v1.16.0): the spoken distance guidance now keeps watching during Capture, not just before it. A real capture showed a user moving back over a meter mid-capture with no warning, coming back 'good' at a rate that was almost certainly the movement itself, not breathing — the existing too-close/too-far bounds didn't catch it because they're deliberately wide plausibility limits, not a 'stayed where you started' check. Now compares the live framing to the box actually locked in for this capture and says 'You've moved closer/back, please hold your position' on meaningful drift. No detection, framing, or signal-analysis logic changed.">Build 31 &middot; 2026-09-22 &middot; Breath: distance voice guidance now also watches during Capture, not just before it</div></div>
 
 <div class="page home-wrap" data-page="home">
 
@@ -1851,7 +1851,7 @@ body.lightpanel { background: #ffffff; }
   <canvas id="b_roiCanvas" width="40" height="40"></canvas>
   <button id="b_startCameraBtn" class="btn-secondary">Start Camera</button>
   <span id="b_poseModelPill" class="pill wait"></span>
-  <p class="hint">Prop the phone so your chest/upper torso fills the dashed guide — for a self-test with the front camera that's usually closer than 40-60cm (more like arm's length), since there's no helper to stand it back further. The guide turns green when your shoulders are framed inside it, red when they're not. If you're clearly too close or too far, the app will also say so out loud ("Too close, please step back" / "Too far, please move closer") so you don't have to keep checking the screen. Sit or lie back so you're not moving other than breathing. Loose baggy clothing gives a weaker signal than a closer-fitting top. You can switch camera at any time — it reopens with the new one.</p>
+  <p class="hint">Prop the phone so your chest/upper torso fills the dashed guide — for a self-test with the front camera that's usually closer than 40-60cm (more like arm's length), since there's no helper to stand it back further. The guide turns green when your shoulders are framed inside it, red when they're not. If you're clearly too close or too far, the app will also say so out loud ("Too close, please step back" / "Too far, please move closer") so you don't have to keep checking the screen — and it keeps listening for this during Capture too, so if you drift out of position partway through it'll say "You've moved closer/back, please hold your position" instead of silently capturing a bad reading. Sit or lie back so you're not moving other than breathing. Loose baggy clothing gives a weaker signal than a closer-fitting top. You can switch camera at any time — it reopens with the new one.</p>
 </section>
 
 <section>
@@ -6582,7 +6582,7 @@ const roiCanvas = $("b_roiCanvas");
 const roiCtx = roiCanvas.getContext("2d", { willReadFrequently: true });
 const roiGuideEl = document.querySelector(".panel-breath .roi-guide");
 
-const APP_VERSION = "1.15.0"; // 1.15.0 (Build 30): fixed the Build 29 distance voice feature not being heard on a real device — real per-frame pose noise was flickering the guide reason several times a second while getting into position, and the old logic reset itself on every non-bad frame and re-spoke (cancelling the prior utterance) the instant it flickered bad again, so nothing audible ever got out. Now requires ~400ms of continuous bad-distance reading before speaking at all, and throttles by direction (too-close/too-far) rather than resetting on every brief good blip. Was: 1.14.0 (Build 29): Chest Breathing Camera speaks up when framing is clearly too close/too far ("Too close, please step back" / "Too far, please move closer"), reusing the existing SHOULDER_DIST_MIN/MAX plausibility bounds rather than a new guessed "ideal" range — no other detection or analysis logic changed.
+const APP_VERSION = "1.16.0"; // 1.16.0 (Build 31): distance voice guidance now also runs DURING capture, not just before it — a real capture showed a user moving back over a meter mid-capture with no warning, producing a "good" reading that was almost certainly the movement, not breathing (the existing SHOULDER_DIST_MIN/MAX absolute bounds didn't catch it, since a >1m move can still land inside those deliberately wide limits). Mid-capture now compares the live box to the one actually locked in for this capture (captureRefBoxW, CAPTURE_DRIFT_RATIO=0.7, uncalibrated first guess) and speaks "You've moved closer/back, please hold your position" on meaningful drift, while the pre-capture absolute-bounds check is unchanged. Was: 1.15.0 (Build 30): fixed the Build 29 distance voice feature not being heard on a real device — real per-frame pose noise was flickering the guide reason several times a second while getting into position, and the old logic reset itself on every non-bad frame and re-spoke (cancelling the prior utterance) the instant it flickered bad again, so nothing audible ever got out. Now requires ~400ms of continuous bad-distance reading before speaking at all, and throttles by direction (too-close/too-far) rather than resetting on every brief good blip.
 const PLATFORM = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream ? "iOS"
   : /Android/.test(navigator.userAgent) ? "Android" : "Desktop";
 $("b_verPill").textContent = "v" + APP_VERSION + " · " + PLATFORM;
@@ -7209,29 +7209,62 @@ const DISTANCE_CONFIRM_MS = 400; // minimum continuous bad-distance time before 
 let distanceBadSince = null;
 let lastDistanceSpokenDirection = null;
 let lastDistanceSpokenTime = 0;
-// Only speaks for the one guide-rejection reason that's actually about
-// distance (implausible_shoulder_distance) — not orientation or visibility
-// issues, which aren't what the user asked about and would need their own
-// wording. Stays silent once framing is OK again — no "good distance" cue,
-// since the green guide box already shows that. Never speaks during an
-// active capture (b_captureBtn stays disabled for the whole 30-60s capture
-// window) — the whole point of that window is steady, undistracted
-// breathing, and the chest box is frozen for capture anyway so a live
-// distance cue wouldn't be acting on anything current.
+// Round 21/Build 31: Build 29-30 only ever spoke before Capture was pressed
+// — deliberately, since the whole point of the 30-60s capture window is
+// steady, undistracted breathing. A real capture then showed why that's not
+// enough on its own: a user moved back over a meter mid-capture, got no
+// warning at all, and the trial still came back "good, 25.2bpm" — almost
+// certainly the movement itself, not real breathing (the raw signal's
+// swing was several times any prior good capture's, and its frequency
+// spectrum was unusually flat rather than peaked). The existing
+// implausible_shoulder_distance check (SHOULDER_DIST_MIN/MAX) didn't catch
+// it either, because those bounds are deliberately wide plausibility
+// limits, not a "stayed where you started" check — the diagnostics confirm
+// the live guide read "ok" for this person's whole capture even while they
+// were, by their own account, over a meter further back than when Capture
+// was pressed. So mid-capture, this now compares the LIVE box's size to
+// captureRefBoxW — the box actually locked in and being sampled — rather
+// than to the absolute bounds, since that's the thing that actually
+// determines whether the frozen ROI is still pointed at the chest.
+// CAPTURE_DRIFT_RATIO is a first guess, uncalibrated the same way the
+// peakiness threshold and the distance bounds themselves started out —
+// expect it to need adjusting once a few more sessions show how much
+// normal postural sway moves the live box during a real capture.
+const CAPTURE_DRIFT_RATIO = 0.7; // live box width outside [0.7x, 1/0.7x] of the locked capture box's width counts as "moved"
+let captureRefBoxW = null; // raw box width locked in at Capture time; null when not capturing, or when the fallback box (no live lock) was used and there's nothing to compare drift against
+// Speaks for the one guide-rejection reason that's actually about distance
+// (implausible_shoulder_distance) before a capture, or meaningful drift
+// from the locked capture box during one — not orientation/visibility
+// issues, which need their own wording and aren't what was asked for here.
+// Stays silent once framing/position is OK again — no "good" cue, since
+// the green guide box already shows that during setup.
 function speakDistanceGuidance(box) {
-  if ($("b_captureBtn").disabled) { distanceBadSince = null; return; } // capture in progress — stay quiet
-  if (box.ok || box.reason !== "implausible_shoulder_distance") {
+  const capturing = $("b_captureBtn").disabled;
+  let badDirection = null; // "close" | "far" | null
+  if (capturing && captureRefBoxW != null && box.ok && box.raw) {
+    const ratio = box.raw.w / captureRefBoxW;
+    if (ratio < CAPTURE_DRIFT_RATIO) badDirection = "far";
+    else if (ratio > 1 / CAPTURE_DRIFT_RATIO) badDirection = "close";
+  } else if (!box.ok && box.reason === "implausible_shoulder_distance") {
+    // catches an extreme move even mid-capture (outside the absolute
+    // plausibility bounds, not just drifted from the locked box), and is
+    // also the only check that applies before a capture starts.
+    badDirection = box.shoulderW > SHOULDER_DIST_MAX ? "close" : "far";
+  }
+  if (badDirection == null) {
     distanceBadSince = null; // require a fresh confirm window next time it goes bad, but leave lastDistanceSpoken* alone — a brief good blip shouldn't force an immediate re-speak on the very next bad frame
     return;
   }
   const now = performance.now();
   if (distanceBadSince == null) distanceBadSince = now;
   if (now - distanceBadSince < DISTANCE_CONFIRM_MS) return; // still confirming — could just be a single noisy frame
-  const direction = box.shoulderW > SHOULDER_DIST_MAX ? "close" : "far";
-  const directionChanged = direction !== lastDistanceSpokenDirection;
+  const directionChanged = badDirection !== lastDistanceSpokenDirection;
   if (!directionChanged && now - lastDistanceSpokenTime < DISTANCE_SPEECH_THROTTLE_MS) return;
-  bSpeak(direction === "close" ? "Too close. Please step back." : "Too far. Please move closer.");
-  lastDistanceSpokenDirection = direction;
+  const text = capturing
+    ? (badDirection === "close" ? "You've moved closer. Please hold your position." : "You've moved back. Please hold your position.")
+    : (badDirection === "close" ? "Too close. Please step back." : "Too far. Please move closer.");
+  bSpeak(text);
+  lastDistanceSpokenDirection = badDirection;
   lastDistanceSpokenTime = now;
 }
 function logGuideReasonThrottled(box) {
@@ -7354,6 +7387,12 @@ $("b_captureBtn").addEventListener("click", async () => {
   diag("Capture using " + (useLiveLock ? "pose-derived" : "fallback fixed") + " chest box: " + JSON.stringify({
     x: +captureBox.x.toFixed(3), y: +captureBox.y.toFixed(3), w: +captureBox.w.toFixed(3), h: +captureBox.h.toFixed(3)
   }) + (lastGoodChestBox && !useLiveLock ? ` (last confident lock was ${lockAgeMs.toFixed(0)}ms ago, stale)` : ""));
+  // Round 21/Build 31: reference width for mid-capture drift detection (see
+  // speakDistanceGuidance) — only meaningful when there was a real live lock
+  // to begin with; the fallback fixed box isn't derived from this person's
+  // actual shoulder width, so there's nothing to compare drift against.
+  captureRefBoxW = useLiveLock ? captureBox.w : null;
+  distanceBadSince = null; lastDistanceSpokenDirection = null; lastDistanceSpokenTime = 0; // fresh warm-up for this capture, so a warning from before Capture was pressed doesn't suppress or bleed into one during it
   const durationMs = parseInt($("b_capDur").value, 10) * 1000;
   // Round 14/Build 28: read once at the instant Capture is pressed, so a
   // paced-breathing calibration trial's known target rate travels with the
@@ -7398,6 +7437,8 @@ $("b_captureBtn").addEventListener("click", async () => {
       trials.push({ dur: durationMs / 1000, rate: result.rate, peakiness: result.peakiness, quality: result.quality, notes });
       renderLog();
       $("b_captureBtn").disabled = false;
+      captureRefBoxW = null; // back to setup-phase (absolute-bounds) distance checking
+      distanceBadSince = null; lastDistanceSpokenDirection = null; lastDistanceSpokenTime = 0;
       return;
     }
     requestAnimationFrame(tick);
