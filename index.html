@@ -951,7 +951,7 @@ body.lightpanel { background: #ffffff; }
 </head>
 <body>
 
-<div id="buildBanner"><div class="inner" title="Build 29 · 2026-09-22 · Chest Breathing Camera (breath panel, v1.14.0): the camera-setup guide now speaks up when framing is clearly too close or too far ('Too close, please step back' / 'Too far, please move closer'), on top of the existing green/red guide box. Reuses the app's existing shoulder-distance plausibility bounds (SHOULDER_DIST_MIN/MAX) rather than a new guessed 'ideal' range — only speaks when framing was already going to be rejected, throttled to at most once every 4s, and silent during an active capture. No detection, framing, or signal-analysis logic changed.">Build 29 &middot; 2026-09-22 &middot; Breath: added spoken too-close/too-far distance feedback during camera setup</div></div>
+<div id="buildBanner"><div class="inner" title="Build 30 · 2026-09-22 · Chest Breathing Camera (breath panel, v1.15.0): fixed Build 29's distance voice feature being effectively inaudible on a real device — real pose-tracking noise flickers the guide reason several times a second while getting into position, and the old logic reset and re-spoke (cancelling the prior utterance) on every flicker back to bad, so nothing coherent ever got said. Now requires about 400ms of continuous bad-distance reading before speaking, and throttles by direction (too-close/too-far) instead of resetting on brief good blips. No detection, framing, or signal-analysis logic changed.">Build 30 &middot; 2026-09-22 &middot; Breath: fixed the distance voice cue not actually being heard on a real device (was getting cancelled by its own flicker)</div></div>
 
 <div class="page home-wrap" data-page="home">
 
@@ -6582,7 +6582,7 @@ const roiCanvas = $("b_roiCanvas");
 const roiCtx = roiCanvas.getContext("2d", { willReadFrequently: true });
 const roiGuideEl = document.querySelector(".panel-breath .roi-guide");
 
-const APP_VERSION = "1.14.0"; // 1.14.0 (Build 29): Chest Breathing Camera speaks up when framing is clearly too close/too far ("Too close, please step back" / "Too far, please move closer"), reusing the existing SHOULDER_DIST_MIN/MAX plausibility bounds rather than a new guessed "ideal" range — no other detection or analysis logic changed. Was: 1.13.0 (Build 28): added an optional "paced/expected rate" field for calibration testing — stamps the known target rate and the resulting error straight into the trial log/CSV, no detection or analysis logic changed
+const APP_VERSION = "1.15.0"; // 1.15.0 (Build 30): fixed the Build 29 distance voice feature not being heard on a real device — real per-frame pose noise was flickering the guide reason several times a second while getting into position, and the old logic reset itself on every non-bad frame and re-spoke (cancelling the prior utterance) the instant it flickered bad again, so nothing audible ever got out. Now requires ~400ms of continuous bad-distance reading before speaking at all, and throttles by direction (too-close/too-far) rather than resetting on every brief good blip. Was: 1.14.0 (Build 29): Chest Breathing Camera speaks up when framing is clearly too close/too far ("Too close, please step back" / "Too far, please move closer"), reusing the existing SHOULDER_DIST_MIN/MAX plausibility bounds rather than a new guessed "ideal" range — no other detection or analysis logic changed.
 const PLATFORM = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream ? "iOS"
   : /Android/.test(navigator.userAgent) ? "Android" : "Desktop";
 $("b_verPill").textContent = "v" + APP_VERSION + " · " + PLATFORM;
@@ -7186,31 +7186,53 @@ function bSpeak(text) {
     diag("Speech synthesis failed: " + (err.message || err));
   }
 }
-let lastDistanceSpeechReason = null;
-let lastDistanceSpeechTime = 0;
+// Round 20/Build 30 fix: a real-device trace showed the guide reason
+// flickering rapidly between implausible_shoulder_distance and other
+// reasons (too_clipped, no_person_detected, ok) while the person was
+// actually mid-move getting into position — several flips inside 1-2
+// seconds, per the throttled diag log's own timestamps. The original
+// version below reset its "already warned" state on *any* frame that
+// wasn't implausible_shoulder_distance, then spoke again immediately the
+// next time it saw that reason — so on real, noisy per-frame data it was
+// calling bSpeak() (which itself calls speechSynthesis.cancel() right
+// before speaking) many times a second, each call cutting off the previous
+// utterance before it could be heard. Net effect on a real device: no
+// audible cue at all, reported as "distance is not properly detecting."
+// Fixed with two changes: (1) require the bad-distance reading to persist
+// continuously for DISTANCE_CONFIRM_MS before speaking at all, so a single
+// noisy frame can't trigger anything; (2) track the throttle by direction
+// (too-close vs too-far) rather than resetting on every good frame in
+// between, so a brief flicker back to "ok" mid-adjustment no longer forces
+// an immediate re-speak the instant it flickers bad again — same direction
+// still has to wait out the full throttle window.
+const DISTANCE_CONFIRM_MS = 400; // minimum continuous bad-distance time before speaking, to ignore single-frame pose noise
+let distanceBadSince = null;
+let lastDistanceSpokenDirection = null;
+let lastDistanceSpokenTime = 0;
 // Only speaks for the one guide-rejection reason that's actually about
 // distance (implausible_shoulder_distance) — not orientation or visibility
 // issues, which aren't what the user asked about and would need their own
-// wording. Speaks once immediately on entering a bad-distance state, then
-// at most once every DISTANCE_SPEECH_THROTTLE_MS while it persists, and
-// stays silent once framing is OK again — no "good distance" cue, since the
-// green guide box already shows that. Never speaks during an active
-// capture (b_captureBtn stays disabled for the whole 30-60s capture
+// wording. Stays silent once framing is OK again — no "good distance" cue,
+// since the green guide box already shows that. Never speaks during an
+// active capture (b_captureBtn stays disabled for the whole 30-60s capture
 // window) — the whole point of that window is steady, undistracted
 // breathing, and the chest box is frozen for capture anyway so a live
 // distance cue wouldn't be acting on anything current.
 function speakDistanceGuidance(box) {
-  if ($("b_captureBtn").disabled) return; // capture in progress — stay quiet
+  if ($("b_captureBtn").disabled) { distanceBadSince = null; return; } // capture in progress — stay quiet
   if (box.ok || box.reason !== "implausible_shoulder_distance") {
-    lastDistanceSpeechReason = null; // reset so the next bad reading speaks immediately, not after a stale throttle window
+    distanceBadSince = null; // require a fresh confirm window next time it goes bad, but leave lastDistanceSpoken* alone — a brief good blip shouldn't force an immediate re-speak on the very next bad frame
     return;
   }
   const now = performance.now();
-  if (box.reason === lastDistanceSpeechReason && now - lastDistanceSpeechTime < DISTANCE_SPEECH_THROTTLE_MS) return;
-  const tooClose = box.shoulderW > SHOULDER_DIST_MAX;
-  bSpeak(tooClose ? "Too close. Please step back." : "Too far. Please move closer.");
-  lastDistanceSpeechReason = box.reason;
-  lastDistanceSpeechTime = now;
+  if (distanceBadSince == null) distanceBadSince = now;
+  if (now - distanceBadSince < DISTANCE_CONFIRM_MS) return; // still confirming — could just be a single noisy frame
+  const direction = box.shoulderW > SHOULDER_DIST_MAX ? "close" : "far";
+  const directionChanged = direction !== lastDistanceSpokenDirection;
+  if (!directionChanged && now - lastDistanceSpokenTime < DISTANCE_SPEECH_THROTTLE_MS) return;
+  bSpeak(direction === "close" ? "Too close. Please step back." : "Too far. Please move closer.");
+  lastDistanceSpokenDirection = direction;
+  lastDistanceSpokenTime = now;
 }
 function logGuideReasonThrottled(box) {
   const now = performance.now();
