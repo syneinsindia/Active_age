@@ -951,7 +951,7 @@ body.lightpanel { background: #ffffff; }
 </head>
 <body>
 
-<div id="buildBanner"><div class="inner" title="Build 28 · 2026-09-21 · Chest Breathing Camera (breath panel, v1.13.0): added an optional Paced/expected rate field to the Capture section, for calibration testing — breathe in time with a metronome or counted cadence at a known rate, enter that rate before pressing Capture, and it's stamped into the trial log and CSV (paced=Xbpm; error=+/-Ybpm) so results are self-documenting instead of relying on a separately-kept note of which trial was which. Pure instrumentation — no detection, framing, or signal-analysis logic changed. Leave it blank for a normal, unpaced trial, same as every trial before this build">Build 28 &middot; 2026-09-21 &middot; Breath: added an optional paced-rate field so calibration trials self-document their known target rate and error</div></div>
+<div id="buildBanner"><div class="inner" title="Build 29 · 2026-09-22 · Chest Breathing Camera (breath panel, v1.14.0): the camera-setup guide now speaks up when framing is clearly too close or too far ('Too close, please step back' / 'Too far, please move closer'), on top of the existing green/red guide box. Reuses the app's existing shoulder-distance plausibility bounds (SHOULDER_DIST_MIN/MAX) rather than a new guessed 'ideal' range — only speaks when framing was already going to be rejected, throttled to at most once every 4s, and silent during an active capture. No detection, framing, or signal-analysis logic changed.">Build 29 &middot; 2026-09-22 &middot; Breath: added spoken too-close/too-far distance feedback during camera setup</div></div>
 
 <div class="page home-wrap" data-page="home">
 
@@ -1851,7 +1851,7 @@ body.lightpanel { background: #ffffff; }
   <canvas id="b_roiCanvas" width="40" height="40"></canvas>
   <button id="b_startCameraBtn" class="btn-secondary">Start Camera</button>
   <span id="b_poseModelPill" class="pill wait"></span>
-  <p class="hint">Prop the phone so your chest/upper torso fills the dashed guide — for a self-test with the front camera that's usually closer than 40-60cm (more like arm's length), since there's no helper to stand it back further. The guide turns green when your shoulders are framed inside it, red when they're not. Sit or lie back so you're not moving other than breathing. Loose baggy clothing gives a weaker signal than a closer-fitting top. You can switch camera at any time — it reopens with the new one.</p>
+  <p class="hint">Prop the phone so your chest/upper torso fills the dashed guide — for a self-test with the front camera that's usually closer than 40-60cm (more like arm's length), since there's no helper to stand it back further. The guide turns green when your shoulders are framed inside it, red when they're not. If you're clearly too close or too far, the app will also say so out loud ("Too close, please step back" / "Too far, please move closer") so you don't have to keep checking the screen. Sit or lie back so you're not moving other than breathing. Loose baggy clothing gives a weaker signal than a closer-fitting top. You can switch camera at any time — it reopens with the new one.</p>
 </section>
 
 <section>
@@ -6582,7 +6582,7 @@ const roiCanvas = $("b_roiCanvas");
 const roiCtx = roiCanvas.getContext("2d", { willReadFrequently: true });
 const roiGuideEl = document.querySelector(".panel-breath .roi-guide");
 
-const APP_VERSION = "1.13.0"; // 1.13.0 (Build 28): added an optional "paced/expected rate" field for calibration testing — stamps the known target rate and the resulting error straight into the trial log/CSV, no detection or analysis logic changed
+const APP_VERSION = "1.14.0"; // 1.14.0 (Build 29): Chest Breathing Camera speaks up when framing is clearly too close/too far ("Too close, please step back" / "Too far, please move closer"), reusing the existing SHOULDER_DIST_MIN/MAX plausibility bounds rather than a new guessed "ideal" range — no other detection or analysis logic changed. Was: 1.13.0 (Build 28): added an optional "paced/expected rate" field for calibration testing — stamps the known target rate and the resulting error straight into the trial log/CSV, no detection or analysis logic changed
 const PLATFORM = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream ? "iOS"
   : /Android/.test(navigator.userAgent) ? "Android" : "Desktop";
 $("b_verPill").textContent = "v" + APP_VERSION + " · " + PLATFORM;
@@ -6890,6 +6890,19 @@ const SHOULDER_MIN_VISIBILITY = 0.5;
 // front).
 const NOSE_MIN_VISIBILITY = 0.5; // mirrors SHOULDER_MIN_VISIBILITY's threshold; a face-on nose should read confidently above this, a facing-away one near zero
 const SHOULDER_DIST_MIN = 0.06, SHOULDER_DIST_MAX = 0.90; // implausible outside this range for a real torso in frame — raised from 0.75 in Round 7/Build 23, see note below
+// Round 19/Build 29: spoken distance feedback, requested after a user asked
+// whether the app could tell them if they're too close/far and say so out
+// loud instead of only showing the guide box. Deliberately reuses these
+// exact SHOULDER_DIST_MIN/MAX bounds rather than defining a narrower "ideal"
+// zone — there's no real-device data yet on what shoulderW value actually
+// corresponds to good signal quality (Round 19's three good-quality trials
+// all sat around 0.235, comfortably mid-range, but one session isn't enough
+// to calibrate a target from). So this only speaks when framing is bad
+// enough that the app was already going to reject it as implausible —
+// low false-positive risk, no new guessed thresholds, and it can be
+// tightened into real "move a bit closer/back" coaching later once a few
+// more sessions show what shoulderW range actually reads well.
+const DISTANCE_SPEECH_THROTTLE_MS = 4000; // don't repeat the same spoken cue more than once every 4s while the condition persists
 const CHEST_BOX_WIDTH_MULT = 2.2, CHEST_BOX_HEIGHT_MULT = 1.8;
 const CHEST_BOX_TOP_MARGIN_MULT = 0.15; // skip a sliver of neck right at the shoulder line
 // Round 4 (Build 20) found the guide almost never went green in practice —
@@ -7159,6 +7172,46 @@ function computeChestBox(lm, video) {
 // the transition worth seeing.
 let lastGuideDiagReason = null;
 let lastGuideDiagTime = 0;
+
+// Same pattern as Balance's balSpeak (v2.0.0) — cancel any pending speech
+// before starting a new cue so cues can't queue up and lag behind what's
+// actually on screen right now.
+function bSpeak(text) {
+  try {
+    if (!("speechSynthesis" in window)) return;
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    window.speechSynthesis.speak(u);
+  } catch (err) {
+    diag("Speech synthesis failed: " + (err.message || err));
+  }
+}
+let lastDistanceSpeechReason = null;
+let lastDistanceSpeechTime = 0;
+// Only speaks for the one guide-rejection reason that's actually about
+// distance (implausible_shoulder_distance) — not orientation or visibility
+// issues, which aren't what the user asked about and would need their own
+// wording. Speaks once immediately on entering a bad-distance state, then
+// at most once every DISTANCE_SPEECH_THROTTLE_MS while it persists, and
+// stays silent once framing is OK again — no "good distance" cue, since the
+// green guide box already shows that. Never speaks during an active
+// capture (b_captureBtn stays disabled for the whole 30-60s capture
+// window) — the whole point of that window is steady, undistracted
+// breathing, and the chest box is frozen for capture anyway so a live
+// distance cue wouldn't be acting on anything current.
+function speakDistanceGuidance(box) {
+  if ($("b_captureBtn").disabled) return; // capture in progress — stay quiet
+  if (box.ok || box.reason !== "implausible_shoulder_distance") {
+    lastDistanceSpeechReason = null; // reset so the next bad reading speaks immediately, not after a stale throttle window
+    return;
+  }
+  const now = performance.now();
+  if (box.reason === lastDistanceSpeechReason && now - lastDistanceSpeechTime < DISTANCE_SPEECH_THROTTLE_MS) return;
+  const tooClose = box.shoulderW > SHOULDER_DIST_MAX;
+  bSpeak(tooClose ? "Too close. Please step back." : "Too far. Please move closer.");
+  lastDistanceSpeechReason = box.reason;
+  lastDistanceSpeechTime = now;
+}
 function logGuideReasonThrottled(box) {
   const now = performance.now();
   const reason = box.ok ? "ok" : box.reason;
@@ -7213,6 +7266,7 @@ function poseGuideLoop() {
   if (result.landmarks && result.landmarks.length > 0) {
     const box = computeChestBox(result.landmarks[0], video);
     logGuideReasonThrottled(box);
+    speakDistanceGuidance(box);
     if (box.ok) {
       lastGoodChestBox = box.raw;
       lastGoodChestBoxTime = performance.now();
