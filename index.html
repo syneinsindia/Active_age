@@ -983,7 +983,7 @@ body.lightpanel { background: #ffffff; }
 </head>
 <body>
 
-<div id="buildBanner"><div class="inner" title="Build 32 · 2026-09-23 · Added Reaction Time (reaction panel, v1.0.0): a plain 5-trial tap-the-green-box game for the free daily-engagement rotation alongside Finger Tapping and Blink-Rate Check, reporting median and best time only, with false starts flagged and excluded rather than silently dropped. Not yet tested on a real device. Also fixed the home page's per-test version badges (navVerGait, navVerHeart, etc.) silently going stale — they were hardcoded text that never updated, so a panel could ship many versions ahead of what its home card showed (Chest Breathing Scan's badge was still reading v1.0.0 despite the panel itself being at v1.16.0 after Rounds 14-21). Each panel now writes its own home-card badge from the same APP_VERSION constant it already uses for its in-panel version pill, so this can't drift again the same way.">Build 32 &middot; 2026-09-23 &middot; Added Reaction Time (5-trial reflex game); fixed home-card version badges silently going stale</div></div>
+<div id="buildBanner"><div class="inner" title="Build 33 · 2026-09-23 · Chest Breathing Scan (breath panel, v1.17.0): speakDistanceGuidance now logs the exact text of every voice cue it actually speaks, plus the mid-capture drift ratio or setup-phase shoulderW that triggered it. Pure instrumentation, no detection/analysis/speech-logic change — added after a Round 22 real-device report of hearing a distance cue during an actual capture couldn't be matched against the diagnostics, since nothing logged what speech actually fired. Was Build 32: Added Reaction Time (reaction panel, v1.0.0): a plain 5-trial tap-the-green-box game for the free daily-engagement rotation alongside Finger Tapping and Blink-Rate Check, reporting median and best time only, with false starts flagged and excluded rather than silently dropped. Also fixed the home page's per-test version badges (navVerGait, navVerHeart, etc.) silently going stale — they were hardcoded text that never updated, so a panel could ship many versions ahead of what its home card showed. Each panel now writes its own home-card badge from the same APP_VERSION constant it already uses for its in-panel version pill.">Build 33 &middot; 2026-09-23 &middot; Chest Breathing Scan: logs the exact text of every distance voice cue actually spoken</div></div>
 
 <div class="page home-wrap" data-page="home">
 
@@ -6681,7 +6681,7 @@ const roiCanvas = $("b_roiCanvas");
 const roiCtx = roiCanvas.getContext("2d", { willReadFrequently: true });
 const roiGuideEl = document.querySelector(".panel-breath .roi-guide");
 
-const APP_VERSION = "1.16.0"; // 1.16.0 (Build 31): distance voice guidance now also runs DURING capture, not just before it — a real capture showed a user moving back over a meter mid-capture with no warning, producing a "good" reading that was almost certainly the movement, not breathing (the existing SHOULDER_DIST_MIN/MAX absolute bounds didn't catch it, since a >1m move can still land inside those deliberately wide limits). Mid-capture now compares the live box to the one actually locked in for this capture (captureRefBoxW, CAPTURE_DRIFT_RATIO=0.7, uncalibrated first guess) and speaks "You've moved closer/back, please hold your position" on meaningful drift, while the pre-capture absolute-bounds check is unchanged. Was: 1.15.0 (Build 30): fixed the Build 29 distance voice feature not being heard on a real device — real per-frame pose noise was flickering the guide reason several times a second while getting into position, and the old logic reset itself on every non-bad frame and re-spoke (cancelling the prior utterance) the instant it flickered bad again, so nothing audible ever got out. Now requires ~400ms of continuous bad-distance reading before speaking at all, and throttles by direction (too-close/too-far) rather than resetting on every brief good blip.
+const APP_VERSION = "1.17.0"; // 1.17.0 (Build 33): pure instrumentation — speakDistanceGuidance now logs the exact text of every cue it actually speaks (plus the triggering ratio/shoulderW), so a real-device report of "I heard a cue" can be matched against the diagnostics instead of guessed at. No detection/analysis/speech-logic change. Was: 1.16.0 (Build 31): distance voice guidance now also runs DURING capture, not just before it — a real capture showed a user moving back over a meter mid-capture with no warning, producing a "good" reading that was almost certainly the movement, not breathing (the existing SHOULDER_DIST_MIN/MAX absolute bounds didn't catch it, since a >1m move can still land inside those deliberately wide limits). Mid-capture now compares the live box to the one actually locked in for this capture (captureRefBoxW, CAPTURE_DRIFT_RATIO=0.7, uncalibrated first guess) and speaks "You've moved closer/back, please hold your position" on meaningful drift, while the pre-capture absolute-bounds check is unchanged. Was: 1.15.0 (Build 30): fixed the Build 29 distance voice feature not being heard on a real device — real per-frame pose noise was flickering the guide reason several times a second while getting into position, and the old logic reset itself on every non-bad frame and re-spoke (cancelling the prior utterance) the instant it flickered bad again, so nothing audible ever got out. Now requires ~400ms of continuous bad-distance reading before speaking at all, and throttles by direction (too-close/too-far) rather than resetting on every brief good blip.
 const PLATFORM = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream ? "iOS"
   : /Android/.test(navigator.userAgent) ? "Android" : "Desktop";
 $("b_verPill").textContent = "v" + APP_VERSION + " · " + PLATFORM;
@@ -7363,6 +7363,16 @@ function speakDistanceGuidance(box) {
   const text = capturing
     ? (badDirection === "close" ? "You've moved closer. Please hold your position." : "You've moved back. Please hold your position.")
     : (badDirection === "close" ? "Too close. Please step back." : "Too far. Please move closer.");
+  // Round 22/Build 33: log every utterance this function actually produces.
+  // Before this, the diagnostics could show a real, sustained bad-distance
+  // reading during a session but had no way to say whether speech actually
+  // fired from it — a real-device report of hearing a cue, with no matching
+  // line in the log, was unresolvable either way. Pure logging, no change to
+  // when or what this function speaks.
+  const cueDetail = capturing && box.raw
+    ? ` (mid-capture drift, ratio=${(box.raw.w / captureRefBoxW).toFixed(3)})`
+    : (box.shoulderW != null ? ` (setup, shoulderW=${box.shoulderW.toFixed(3)})` : " (setup)");
+  diag("Distance cue spoken: \"" + text + "\"" + cueDetail);
   bSpeak(text);
   lastDistanceSpokenDirection = badDirection;
   lastDistanceSpokenTime = now;
