@@ -983,7 +983,7 @@ body.lightpanel { background: #ffffff; }
 </head>
 <body>
 
-<div id="buildBanner"><div class="inner" title="Build 33 · 2026-09-23 · Chest Breathing Scan (breath panel, v1.17.0): speakDistanceGuidance now logs the exact text of every voice cue it actually speaks, plus the mid-capture drift ratio or setup-phase shoulderW that triggered it. Pure instrumentation, no detection/analysis/speech-logic change — added after a Round 22 real-device report of hearing a distance cue during an actual capture couldn't be matched against the diagnostics, since nothing logged what speech actually fired. Was Build 32: Added Reaction Time (reaction panel, v1.0.0): a plain 5-trial tap-the-green-box game for the free daily-engagement rotation alongside Finger Tapping and Blink-Rate Check, reporting median and best time only, with false starts flagged and excluded rather than silently dropped. Also fixed the home page's per-test version badges (navVerGait, navVerHeart, etc.) silently going stale — they were hardcoded text that never updated, so a panel could ship many versions ahead of what its home card showed. Each panel now writes its own home-card badge from the same APP_VERSION constant it already uses for its in-panel version pill.">Build 33 &middot; 2026-09-23 &middot; Chest Breathing Scan: logs the exact text of every distance voice cue actually spoken</div></div>
+<div id="buildBanner"><div class="inner" title="Build 34 · 2026-09-23 · Chest Breathing Scan (breath panel, v1.18.0): a result that clears the peakiness confidence gate now also has to survive a cross-check against a second, independent, crude time-domain cycle count before being reported as good — catches a slow, large-amplitude drift (e.g. postural settling) being confidently mistaken for the real breathing rate, which Round 24 showed peakiness alone can miss (a 'good' 7.4bpm reading against a manual count implying ~22.5bpm, with almost no spectral power at 22.5bpm so it wasn't a visible harmonic mix-up). A large disagreement (2.2x, with real margin either side across every real session on record) downgrades the trial to noisy instead of reporting a confident-but-likely-wrong number. No change to framing, exposure, or the frequency scan itself. Was Build 33: Chest Breathing Scan (v1.17.0): speakDistanceGuidance now logs the exact text of every voice cue it actually speaks, plus the mid-capture drift ratio or setup-phase shoulderW that triggered it — pure instrumentation. Was Build 32: Added Reaction Time (reaction panel, v1.0.0), and fixed the home page's per-test version badges silently going stale.">Build 34 &middot; 2026-09-23 &middot; Chest Breathing Scan: cross-checks a confident reading against an independent cycle count</div></div>
 
 <div class="page home-wrap" data-page="home">
 
@@ -6681,7 +6681,7 @@ const roiCanvas = $("b_roiCanvas");
 const roiCtx = roiCanvas.getContext("2d", { willReadFrequently: true });
 const roiGuideEl = document.querySelector(".panel-breath .roi-guide");
 
-const APP_VERSION = "1.17.0"; // 1.17.0 (Build 33): pure instrumentation — speakDistanceGuidance now logs the exact text of every cue it actually speaks (plus the triggering ratio/shoulderW), so a real-device report of "I heard a cue" can be matched against the diagnostics instead of guessed at. No detection/analysis/speech-logic change. Was: 1.16.0 (Build 31): distance voice guidance now also runs DURING capture, not just before it — a real capture showed a user moving back over a meter mid-capture with no warning, producing a "good" reading that was almost certainly the movement, not breathing (the existing SHOULDER_DIST_MIN/MAX absolute bounds didn't catch it, since a >1m move can still land inside those deliberately wide limits). Mid-capture now compares the live box to the one actually locked in for this capture (captureRefBoxW, CAPTURE_DRIFT_RATIO=0.7, uncalibrated first guess) and speaks "You've moved closer/back, please hold your position" on meaningful drift, while the pre-capture absolute-bounds check is unchanged. Was: 1.15.0 (Build 30): fixed the Build 29 distance voice feature not being heard on a real device — real per-frame pose noise was flickering the guide reason several times a second while getting into position, and the old logic reset itself on every non-bad frame and re-spoke (cancelling the prior utterance) the instant it flickered bad again, so nothing audible ever got out. Now requires ~400ms of continuous bad-distance reading before speaking at all, and throttles by direction (too-close/too-far) rather than resetting on every brief good blip.
+const APP_VERSION = "1.18.0"; // 1.18.0 (Build 34): a "good" result must now also survive a cross-check against an independent, crude time-domain cycle count, not just clear the peakiness gate — a Round 24 trial reported "good" at 7.4bpm (peakiness 0.54) against a manual count implying ~22.5bpm, almost exactly 3x off, with barely any spectral power at 22.5bpm (2.3%) so it wasn't a spectrum-visible harmonic mix-up. A large disagreement (CYCLE_DISAGREE_RATIO=2.2x, checked against every real session on record — Rounds 22-24 — where every independently-confirmed-accurate trial stayed within 0.63x-1.56x) now downgrades the trial to noisy instead of reporting a confident-but-likely-wrong number. Detection/framing logic untouched; this only changes when a capture that already passed the frequency scan gets a second look before being trusted. Was: 1.17.0 (Build 33): pure instrumentation — speakDistanceGuidance now logs the exact text of every cue it actually speaks (plus the triggering ratio/shoulderW), so a real-device report of "I heard a cue" can be matched against the diagnostics instead of guessed at. No detection/analysis/speech-logic change. Was: 1.16.0 (Build 31): distance voice guidance now also runs DURING capture, not just before it — a real capture showed a user moving back over a meter mid-capture with no warning, producing a "good" reading that was almost certainly the movement, not breathing (the existing SHOULDER_DIST_MIN/MAX absolute bounds didn't catch it, since a >1m move can still land inside those deliberately wide limits). Mid-capture now compares the live box to the one actually locked in for this capture (captureRefBoxW, CAPTURE_DRIFT_RATIO=0.7, uncalibrated first guess) and speaks "You've moved closer/back, please hold your position" on meaningful drift, while the pre-capture absolute-bounds check is unchanged. Was: 1.15.0 (Build 30): fixed the Build 29 distance voice feature not being heard on a real device — real per-frame pose noise was flickering the guide reason several times a second while getting into position, and the old logic reset itself on every non-bad frame and re-spoke (cancelling the prior utterance) the instant it flickered bad again, so nothing audible ever got out. Now requires ~400ms of continuous bad-distance reading before speaking at all, and throttles by direction (too-close/too-far) rather than resetting on every brief good blip.
 const PLATFORM = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream ? "iOS"
   : /Android/.test(navigator.userAgent) ? "Android" : "Desktop";
 $("b_verPill").textContent = "v" + APP_VERSION + " · " + PLATFORM;
@@ -6777,6 +6777,54 @@ const FS_HZ = 10; // resample target — breathing band tops out at 0.5Hz, 10Hz 
 // existed to calibrate against. Expect this to move once real data comes in.
 const PEAKINESS_THRESHOLD = 0.40;
 
+// Round 24/Build 34: peakiness alone doesn't catch every way this can go
+// wrong — a slow, large-amplitude drift (e.g. postural settling right after
+// framing) can be sharply "peaky" in its own right and clear the confidence
+// gate above, even though a much faster, smaller true breathing signal sits
+// underneath it and would be obvious to someone counting by eye. Round 24
+// found this directly: a "good" 7.4bpm reading (peakiness 0.54) against a
+// manual count implying ~22.5bpm — almost exactly 3x off — and checked
+// against a harmonic mix-up the way Round 14 did (comparable power at both
+// frequencies): there wasn't one. Only 2.3% of spectral power sat near
+// 22.5bpm, so this wasn't a spectrum-visible subharmonic pick — the scan
+// found a genuinely dominant slow component that isn't the real rate.
+//
+// This cross-checks the scan's answer against a second, deliberately crude,
+// independent time-domain cycle count on the same smoothed signal — not
+// meant to report a rate of its own (it's too crude to trust as the
+// reported number), only to sanity-check the frequency scan's. A large
+// disagreement between the two is treated as a sign the scan's answer isn't
+// trustworthy, and the trial is downgraded to "noisy" instead of reporting
+// a confident-but-likely-wrong number — the same posture as the peakiness
+// gate itself, just catching a different failure shape.
+//
+// CYCLE_PROMINENCE_FRAC/CYCLE_DISAGREE_RATIO are first guesses, same as
+// every other threshold in this tool started out, but checked against every
+// real session on record at the time this was added (Rounds 22-24, 3
+// sessions, 13 trials): with these values, every trial independently
+// confirmed accurate (via a real ground-truth count or a clean spectral
+// match) stayed within 0.63x-1.56x of the scan's own answer, while the one
+// known-bad trial (Round 24 trial 1) landed at 2.6-2.8x — real margin on
+// both sides, not a threshold picked to fit one trial.
+const CYCLE_PROMINENCE_FRAC = 0.25; // a candidate peak must sit in the top 75% of the trial's own amplitude range to count — filters small frame-to-frame noise without needing a per-trial-tuned height
+const CYCLE_MIN_SPACING_MS = 60000 / RR_BAND_HI; // can't count cycles faster than the tool's own fastest plausible rate (RR_BAND_HI), so this can't itself invent an implausibly fast count
+const CYCLE_DISAGREE_RATIO = 2.2; // flag only a gross mismatch, not ordinary cycle-count imprecision (real good trials landed as high as 1.56x apart from the scan)
+function countCyclesNaive(smooth, amp) {
+  if (smooth.length < 3 || amp <= 0) return 0;
+  const minV = Math.min(...smooth.map(s => s.v));
+  const heightFloor = minV + amp * CYCLE_PROMINENCE_FRAC;
+  const candidates = [];
+  for (let i = 1; i < smooth.length - 1; i++) {
+    const v = smooth[i].v;
+    if (v > smooth[i - 1].v && v >= smooth[i + 1].v && v >= heightFloor) candidates.push(smooth[i]);
+  }
+  const kept = [];
+  for (const p of [...candidates].sort((a, b) => b.v - a.v)) {
+    if (!kept.some(k => Math.abs(k.t - p.t) < CYCLE_MIN_SPACING_MS)) kept.push(p);
+  }
+  return kept.length;
+}
+
 function analyzeChestCapture(samples) {
   if (samples.length < 60) return { rate: null, peakiness: null, quality: "no_signal", reason: "too few frames captured", smoothSeries: null };
   const ac = detrendEMA(samples, 20000); // remove slow lighting drift, keep breathing band
@@ -6806,7 +6854,21 @@ function analyzeChestCapture(samples) {
   if (peakiness < PEAKINESS_THRESHOLD) {
     return { rate: null, peakiness, amp, peakBpm, quality: "noisy", reason: "no clear dominant breathing frequency (spectrum too spread out — likely motion or unstable lighting)", smoothSeries: smooth };
   }
-  return { rate: peakBpm, peakiness, amp, quality: "good", reason: "", smoothSeries: smooth };
+
+  // Peakiness passed — cross-check against the independent cycle count
+  // before trusting this as a confident result (see note above).
+  const durationS = (smooth[smooth.length - 1].t - smooth[0].t) / 1000;
+  const cycleCount = countCyclesNaive(smooth, amp);
+  const naiveBpm = durationS > 0 ? (cycleCount / durationS) * 60 : 0;
+  const disagreeRatio = naiveBpm > 0 && peakBpm > 0 ? Math.max(naiveBpm / peakBpm, peakBpm / naiveBpm) : 1;
+  if (disagreeRatio > CYCLE_DISAGREE_RATIO) {
+    return {
+      rate: null, peakiness, amp, peakBpm, naiveBpm, quality: "noisy",
+      reason: "frequency scan (" + peakBpm.toFixed(1) + "bpm) and a simple cycle count (" + naiveBpm.toFixed(1) + "bpm) disagree by " + disagreeRatio.toFixed(1) + "x — withholding a confident-but-likely-wrong reading rather than reporting either number",
+      smoothSeries: smooth
+    };
+  }
+  return { rate: peakBpm, peakiness, amp, peakBpm, naiveBpm, quality: "good", reason: "", smoothSeries: smooth };
 }
 
 // ---- Camera ----
@@ -7529,7 +7591,7 @@ $("b_captureBtn").addEventListener("click", async () => {
       const errorNote = (expectedRate != null && result.rate != null)
         ? ` (paced ${expectedRate}bpm, error ${(result.rate - expectedRate >= 0 ? "+" : "")}${(result.rate - expectedRate).toFixed(1)}bpm)`
         : (expectedRate != null ? ` (paced ${expectedRate}bpm, no rate reported)` : "");
-      diag("Capture done. rate=" + result.rate + " peakiness=" + result.peakiness + " amp=" + result.amp + " quality=" + result.quality + (result.reason ? " (" + result.reason + ")" : "") + errorNote);
+      diag("Capture done. rate=" + result.rate + " peakiness=" + result.peakiness + " amp=" + result.amp + " quality=" + result.quality + (result.reason ? " (" + result.reason + ")" : "") + (result.naiveBpm != null ? " cycleCheckBpm=" + result.naiveBpm.toFixed(1) : "") + errorNote);
       const trialNum = trials.length + 1;
       const smoothSeries = result.smoothSeries; // same length/order as samples when present — the exact signal the amplitude/frequency analysis ran on
       samples.forEach((s, i) => {
