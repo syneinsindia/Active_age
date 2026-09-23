@@ -678,6 +678,8 @@ body.lightpanel { background: #ffffff; }
 .panel-submax input.notes-in { width: 90px; padding: 3px 4px; font-size: 0.72rem; margin: 0; text-align: left; }
 .panel-submax textarea#diagLog { width: 100%; height: 140px; font-family: var(--mono); font-size: 0.68rem; background: #111; color: #9fe0a8; border-radius: 6px; padding: 8px; white-space: pre-wrap; }
 .panel-submax .caveat { background: #fdf7e3; border: 1px solid #e7d79a; border-radius: 8px; padding: 10px; font-size: 0.78rem; line-height: 1.5; margin-bottom: 10px; color: #5a4a1f; }
+.panel-breath details summary { cursor: pointer; font-weight: 600; font-size: 0.85rem; }
+.panel-breath details p, .panel-breath details ol { font-size: 0.82rem; line-height: 1.5; color: #333; }
 .panel-breath h1 { font-size: 1.15rem; margin: 0 0 4px; }
 .panel-breath .sub { color: var(--muted); font-size: 0.85rem; margin: 0 0 16px; line-height: 1.4; }
 .panel-breath section { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 14px; margin-bottom: 12px; }
@@ -718,7 +720,7 @@ body.lightpanel { background: #ffffff; }
 .panel-breath input.notes-in { width: 100px; padding: 3px 4px; font-size: 0.74rem; margin: 0; text-align: left; }
 .panel-breath textarea#diagLog { width: 100%; height: 140px; font-family: var(--mono); font-size: 0.68rem; background: #111; color: #9fe0a8; border-radius: 6px; padding: 8px; white-space: pre-wrap; }
 .panel-breath .caveat { background: #fdf7e3; border: 1px solid #e7d79a; border-radius: 8px; padding: 10px; font-size: 0.78rem; line-height: 1.5; margin-bottom: 10px; color: #5a4a1f; }
-.panel-breath canvas#roiCanvas { display: none; }
+.panel-breath canvas#b_roiCanvas { display: none; }
 .panel-walk h1 { font-size: 1.15rem; margin: 0 0 4px; }
 .panel-walk .sub { color: var(--muted); font-size: 0.85rem; margin: 0 0 16px; line-height: 1.4; }
 .panel-walk section { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 14px; margin-bottom: 12px; }
@@ -983,7 +985,7 @@ body.lightpanel { background: #ffffff; }
 </head>
 <body>
 
-<div id="buildBanner"><div class="inner" title="Build 34 · 2026-09-23 · Chest Breathing Scan (breath panel, v1.18.0): a result that clears the peakiness confidence gate now also has to survive a cross-check against a second, independent, crude time-domain cycle count before being reported as good — catches a slow, large-amplitude drift (e.g. postural settling) being confidently mistaken for the real breathing rate, which Round 24 showed peakiness alone can miss (a 'good' 7.4bpm reading against a manual count implying ~22.5bpm, with almost no spectral power at 22.5bpm so it wasn't a visible harmonic mix-up). A large disagreement (2.2x, with real margin either side across every real session on record) downgrades the trial to noisy instead of reporting a confident-but-likely-wrong number. No change to framing, exposure, or the frequency scan itself. Was Build 33: Chest Breathing Scan (v1.17.0): speakDistanceGuidance now logs the exact text of every voice cue it actually speaks, plus the mid-capture drift ratio or setup-phase shoulderW that triggered it — pure instrumentation. Was Build 32: Added Reaction Time (reaction panel, v1.0.0), and fixed the home page's per-test version badges silently going stale.">Build 34 &middot; 2026-09-23 &middot; Chest Breathing Scan: cross-checks a confident reading against an independent cycle count</div></div>
+<div id="buildBanner"><div class="inner" title="Build 35 · 2026-09-23 · Chest Breathing Scan (breath panel, v1.19.0): UI/layout only, no detection or analysis change. Start Camera and Start Capture now sit next to each other right under the video; the capture timer moved up to sit directly under the video frame instead of below the length/expected-rate fields; the always-open 'how to use' paragraph is now a collapsed How to use (read once) disclosure, matching the other panels; and a pre-existing CSS bug that left the hidden 40x40 processing canvas visibly rendering between the video and the buttons is fixed. Was Build 34: Chest Breathing Scan (v1.18.0): a result that clears the peakiness confidence gate now also has to survive a cross-check against a second, independent, crude time-domain cycle count before being reported as good — catches a slow, large-amplitude drift (e.g. postural settling) being confidently mistaken for the real breathing rate. A large disagreement (2.2x, with real margin either side across every real session on record) downgrades the trial to noisy instead of reporting a confident-but-likely-wrong number. Was Build 33: Chest Breathing Scan (v1.17.0): speakDistanceGuidance now logs the exact text of every voice cue it actually speaks, plus the mid-capture drift ratio or setup-phase shoulderW that triggered it — pure instrumentation.">Build 35 &middot; 2026-09-23 &middot; Chest Breathing Scan: UI layout — timer under the video, Start Camera/Capture together, instructions collapsed into Help</div></div>
 
 <div class="page home-wrap" data-page="home">
 
@@ -1876,8 +1878,13 @@ body.lightpanel { background: #ffffff; }
   <b>Untested against real captures.</b> Like every tool in this suite started out, the accept/reject threshold below is a synthetic placeholder, not yet calibrated from a real device — expect it to need adjusting once real captures come back. Sit still, breathe normally, and keep the room lighting steady and even (avoid backlighting from a window).
 </div>
 
+<details style="margin-bottom:12px;">
+<summary>How to use (read once)</summary>
+<p>Prop the phone so your chest/upper torso fills the dashed guide — for a self-test with the front camera that's usually closer than 40-60cm (more like arm's length), since there's no helper to stand it back further. The guide turns green when your shoulders are framed inside it, red when they're not. If you're clearly too close or too far, the app will also say so out loud ("Too close, please step back" / "Too far, please move closer") so you don't have to keep checking the screen — and it keeps listening for this during Capture too, so if you drift out of position partway through it'll say "You've moved closer/back, please hold your position" instead of silently capturing a bad reading. Sit or lie back so you're not moving other than breathing. Loose baggy clothing gives a weaker signal than a closer-fitting top. You can switch camera at any time — it reopens with the new one.</p>
+</details>
+
 <section>
-  <h2>1 · Camera setup</h2>
+  <h2>1 · Camera &amp; capture</h2>
   <label for="b_camMode">Camera</label>
   <select id="b_camMode">
     <option value="user" selected>Front camera (see yourself, self-test)</option>
@@ -1887,14 +1894,17 @@ body.lightpanel { background: #ffffff; }
     <video id="b_video" autoplay playsinline muted></video>
     <div class="roi-guide"></div>
   </div>
+  <div class="big-timer" id="b_captureTimer">—</div>
   <canvas id="b_roiCanvas" width="40" height="40"></canvas>
-  <button id="b_startCameraBtn" class="btn-secondary">Start Camera</button>
+  <div class="row">
+    <button id="b_startCameraBtn" class="btn-secondary">Start Camera</button>
+    <button id="b_captureBtn" class="btn-primary" disabled>Start Capture</button>
+  </div>
   <span id="b_poseModelPill" class="pill wait"></span>
-  <p class="hint">Prop the phone so your chest/upper torso fills the dashed guide — for a self-test with the front camera that's usually closer than 40-60cm (more like arm's length), since there's no helper to stand it back further. The guide turns green when your shoulders are framed inside it, red when they're not. If you're clearly too close or too far, the app will also say so out loud ("Too close, please step back" / "Too far, please move closer") so you don't have to keep checking the screen — and it keeps listening for this during Capture too, so if you drift out of position partway through it'll say "You've moved closer/back, please hold your position" instead of silently capturing a bad reading. Sit or lie back so you're not moving other than breathing. Loose baggy clothing gives a weaker signal than a closer-fitting top. You can switch camera at any time — it reopens with the new one.</p>
 </section>
 
 <section>
-  <h2>2 · Capture</h2>
+  <h2>2 · Settings &amp; result</h2>
   <label for="b_capDur">Capture length</label>
   <select id="b_capDur">
     <option value="30">30 seconds</option>
@@ -1903,8 +1913,6 @@ body.lightpanel { background: #ffffff; }
   </select>
   <label for="b_expectedRate">Paced/expected rate (breaths/min) — optional, for calibration testing</label>
   <input type="number" id="b_expectedRate" min="1" max="60" step="1" placeholder="e.g. 15 — leave blank for a normal, unpaced trial">
-  <button id="b_captureBtn" class="btn-primary" disabled>Start Capture</button>
-  <div class="big-timer" id="b_captureTimer">—</div>
   <div class="big-rr" id="b_rrResult">— <span class="unit">breaths/min</span></div>
   <p class="hint" id="b_qualityHint"></p>
 </section>
@@ -6681,7 +6689,7 @@ const roiCanvas = $("b_roiCanvas");
 const roiCtx = roiCanvas.getContext("2d", { willReadFrequently: true });
 const roiGuideEl = document.querySelector(".panel-breath .roi-guide");
 
-const APP_VERSION = "1.18.0"; // 1.18.0 (Build 34): a "good" result must now also survive a cross-check against an independent, crude time-domain cycle count, not just clear the peakiness gate — a Round 24 trial reported "good" at 7.4bpm (peakiness 0.54) against a manual count implying ~22.5bpm, almost exactly 3x off, with barely any spectral power at 22.5bpm (2.3%) so it wasn't a spectrum-visible harmonic mix-up. A large disagreement (CYCLE_DISAGREE_RATIO=2.2x, checked against every real session on record — Rounds 22-24 — where every independently-confirmed-accurate trial stayed within 0.63x-1.56x) now downgrades the trial to noisy instead of reporting a confident-but-likely-wrong number. Detection/framing logic untouched; this only changes when a capture that already passed the frequency scan gets a second look before being trusted. Was: 1.17.0 (Build 33): pure instrumentation — speakDistanceGuidance now logs the exact text of every cue it actually speaks (plus the triggering ratio/shoulderW), so a real-device report of "I heard a cue" can be matched against the diagnostics instead of guessed at. No detection/analysis/speech-logic change. Was: 1.16.0 (Build 31): distance voice guidance now also runs DURING capture, not just before it — a real capture showed a user moving back over a meter mid-capture with no warning, producing a "good" reading that was almost certainly the movement, not breathing (the existing SHOULDER_DIST_MIN/MAX absolute bounds didn't catch it, since a >1m move can still land inside those deliberately wide limits). Mid-capture now compares the live box to the one actually locked in for this capture (captureRefBoxW, CAPTURE_DRIFT_RATIO=0.7, uncalibrated first guess) and speaks "You've moved closer/back, please hold your position" on meaningful drift, while the pre-capture absolute-bounds check is unchanged. Was: 1.15.0 (Build 30): fixed the Build 29 distance voice feature not being heard on a real device — real per-frame pose noise was flickering the guide reason several times a second while getting into position, and the old logic reset itself on every non-bad frame and re-spoke (cancelling the prior utterance) the instant it flickered bad again, so nothing audible ever got out. Now requires ~400ms of continuous bad-distance reading before speaking at all, and throttles by direction (too-close/too-far) rather than resetting on every brief good blip.
+const APP_VERSION = "1.19.0"; // 1.19.0 (Build 35): UI/layout only, no detection or analysis change. Reordered so Start Camera and Start Capture sit next to each other right under the video instead of in two separate numbered sections; moved the capture timer up to sit directly under the video frame instead of below the capture-length/expected-rate fields, so it's visible without scrolling past them on a phone screen; moved the "how to use" paragraph into a collapsed <details> ("How to use (read once)"), matching the pattern already used on the gait/heart/rom/lung/heartsqi panels, instead of leaving it always expanded; also fixed a pre-existing CSS bug where the hidden 40x40 processing canvas (#b_roiCanvas) had no matching display:none rule (the rule targeted the unprefixed #roiCanvas, which doesn't exist in this panel) and was rendering as a small visible black square between the video and the buttons. Was: 1.18.0 (Build 34): a "good" result must now also survive a cross-check against an independent, crude time-domain cycle count, not just clear the peakiness gate — a Round 24 trial reported "good" at 7.4bpm (peakiness 0.54) against a manual count implying ~22.5bpm, almost exactly 3x off, with barely any spectral power at 22.5bpm (2.3%) so it wasn't a spectrum-visible harmonic mix-up. A large disagreement (CYCLE_DISAGREE_RATIO=2.2x, checked against every real session on record — Rounds 22-24 — where every independently-confirmed-accurate trial stayed within 0.63x-1.56x) now downgrades the trial to noisy instead of reporting a confident-but-likely-wrong number. Was: 1.17.0 (Build 33): pure instrumentation — speakDistanceGuidance now logs the exact text of every cue it actually speaks (plus the triggering ratio/shoulderW), so a real-device report of "I heard a cue" can be matched against the diagnostics instead of guessed at.
 const PLATFORM = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream ? "iOS"
   : /Android/.test(navigator.userAgent) ? "Android" : "Desktop";
 $("b_verPill").textContent = "v" + APP_VERSION + " · " + PLATFORM;
