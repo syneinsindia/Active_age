@@ -68,6 +68,10 @@
   --accent: #4f7ac2;
   --accent-ink: #ffffff;
 }
+.panel-reaction {
+  --accent: #8e2f5f;
+  --accent-ink: #ffffff;
+}
 body { margin: 0;
     background: var(--paper);
     color: var(--ink);
@@ -859,6 +863,34 @@ body.lightpanel { background: #ffffff; }
 .panel-fingertap input.notes-in { width: 100px; padding: 3px 4px; font-size: 0.76rem; margin: 0; text-align: left; }
 .panel-fingertap textarea { width: 100%; height: 140px; font-family: var(--mono); font-size: 0.68rem; background: #111; color: #9fe0a8; border-radius: 6px; padding: 8px; white-space: pre-wrap; }
 .panel-fingertap .caveat { background: #fdf7e3; border: 1px solid #e7d79a; border-radius: 8px; padding: 10px; font-size: 0.78rem; line-height: 1.5; margin-bottom: 10px; color: #5a4a1f; }
+.panel-reaction h1 { font-size: 1.15rem; margin: 0 0 4px; }
+.panel-reaction .sub { color: var(--muted); font-size: 0.85rem; margin: 0 0 16px; line-height: 1.4; }
+.panel-reaction section { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 14px; margin-bottom: 12px; }
+.panel-reaction section h2 { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 0 0 10px; }
+.panel-reaction button { border: none; border-radius: 8px; padding: 12px 14px; font-size: 0.95rem; font-weight: 600; cursor: pointer; width: 100%; margin-bottom: 8px; }
+.panel-reaction button:disabled { opacity: 0.45; cursor: not-allowed; }
+.panel-reaction .btn-primary { background: var(--accent); color: var(--accent-ink); }
+.panel-reaction .btn-secondary { background: #eee; color: var(--ink); }
+.panel-reaction .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 0.72rem; font-weight: 600; }
+.panel-reaction .pill.wait { background: #eee; color: var(--muted); }
+.panel-reaction .hint { font-size: 0.78rem; color: var(--muted); line-height: 1.5; margin: 6px 0 0; }
+.panel-reaction .result-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 8px; }
+.panel-reaction .result-card { background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 10px 6px; text-align: center; }
+.panel-reaction .result-card .lbl { color: var(--muted); font-size: 0.68rem; text-transform: uppercase; letter-spacing: .03em; }
+.panel-reaction .result-card .val { font-family: var(--mono); font-size: 1.15rem; font-weight: 700; margin-top: 4px; }
+.panel-reaction table { width: 100%; border-collapse: collapse; font-size: 0.76rem; }
+.panel-reaction th, .panel-reaction td { border: 1px solid var(--line); padding: 5px 6px; text-align: right; }
+.panel-reaction th:first-child, .panel-reaction td:first-child { text-align: left; }
+.panel-reaction th { background: var(--paper); font-weight: 600; }
+.panel-reaction .table-scroll { overflow-x: auto; }
+.panel-reaction textarea { width: 100%; height: 140px; font-family: var(--mono); font-size: 0.68rem; background: #111; color: #9fe0a8; border-radius: 6px; padding: 8px; white-space: pre-wrap; }
+.panel-reaction .caveat { background: #fdf7e3; border: 1px solid #e7d79a; border-radius: 8px; padding: 10px; font-size: 0.78rem; line-height: 1.5; margin-bottom: 10px; color: #5a4a1f; }
+.panel-reaction .rt-stage {
+  width: 100%; min-height: 140px; border-radius: 10px; margin-top: 8px;
+  display: flex; align-items: center; justify-content: center; text-align: center;
+  font-size: 1.1rem; font-weight: 700; color: #fff; background: var(--accent);
+  cursor: pointer; user-select: none; transition: background 0.1s;
+}
 
 .panel-blink h1 { font-size: 1.15rem; margin: 0 0 4px; }
 .panel-blink .sub { color: var(--muted); font-size: 0.85rem; margin: 0 0 16px; line-height: 1.4; }
@@ -1049,10 +1081,17 @@ body.lightpanel { background: #ffffff; }
   <div class="open">Open test</div>
 </a>
 
+<a class="card" style="--card-accent: #8e2f5f;" href="#reaction">
+  <div class="card-top"><h2>Reaction Time</h2><span class="ver" id="navVerReaction">v1.0.0</span></div>
+  <p>Tap the box the instant it turns green, across 5 trials &mdash; a plain, non-scored reflex game, reported as your own median and best time only. From the Body Check daily-engagement research pass; a candidate for the free daily rotation.</p>
+  <div class="status-row"><span class="status">not yet tested</span><span class="status">new</span></div>
+  <div class="open">Open test</div>
+</a>
+
 <footer class="home-footer">
   Every export from every test above is tagged with that test's version number and the detected platform (iOS/Android), both in the file name and as columns inside the CSV &mdash; so files can be told apart even if renamed. Diagnostics files carry the same tags on their first line. If you're re-testing after an update, check the version badge next to the test's title matches what was just sent, in case the browser served a cached copy &mdash; a hard refresh (pull down to refresh, or close and reopen the tab) fixes that.
   <br><br>
-  This is now a single file &mdash; all thirteen tests and this home page live in one HTML document, navigated with in-page links (no separate files to keep track of). See <code>rom-web-spike-howto.md</code> for the versioning convention. "Heart Rate &mdash; SQI+FFT" is an alternative analysis pipeline being A/B tested against "Heart &amp; Breath Signal", not a replacement for it &mdash; both stay in the app until one wins out. "Heart Recovery Speed", "Cardio Response Test", "Chest Breathing Scan", and "Walking Endurance" are new, first-pass spikes built from a feasibility study of what else a phone's camera/mic/accelerometer could measure &mdash; see <code>new-tests-engineering-spike-log.md</code> for what each one does and why (including why the first two are separate tools rather than one combined check; those internal build names were "Heart &amp; Breath Recovery Check" and "Guided Submaximal Fitness Test," respectively), and none of the four has real-device data behind its thresholds yet (each says so on its own page). "Single-Leg Balance" and "Sit-to-Stand Performance" close a gap flagged in the Body Check engagement plan: both are part of the already-ratified V1 movement battery and already appear in the published Body Check home-screen mockup, but neither had a working capture tool until now. Both started as self-timed/self-counted (Start/Stop and tap-to-count buttons) and were then upgraded to camera-based automatic detection (v2.0.0) &mdash; Sit-to-Stand counts reps by tracking hip height through each stand/sit cycle (pose landmarks, same model family as Gait Speed/ROM), Single-Leg Balance watches all four things that end a trial per the Springer protocol (arms uncrossing, raised foot moving, stance foot pivoting, and on eyes-closed trials, eyes opening via face tracking). Both keep a manual backup (a "correct the count" stepper for Sit-to-Stand, an "I lost balance" tap for Balance) since neither auto-detector has been checked against real trials yet. No graded scoring is shown on either page, only the raw captured numbers, consistent with every other tool here &mdash; Sit-to-Stand's norms (McKay 2017) are confirmed and ready for the scoring engine, while Single-Leg Balance's norms (Springer 2007) still have an open age-band/SD question logged in <code>single-leg-balance-springer-2007.md</code>. "Finger Tapping" and "Blink-Rate Check" are candidate tests for the free daily-engagement rotation, not part of the clinical battery &mdash; see <code>body-check-engagement-execution-plan.md</code> §1. Finger Tapping is a plain on-screen tap counter, no camera. Blink-Rate Check uses the same on-device face tracking now shared with Single-Leg Balance's eyes channel &mdash; explicitly uncalibrated (fixed open/close thresholds, not yet checked against a human-reviewed video count) and, like every camera-based tool on this page, not yet run on a real device.
+  This is now a single file &mdash; all fourteen tests and this home page live in one HTML document, navigated with in-page links (no separate files to keep track of). See <code>rom-web-spike-howto.md</code> for the versioning convention. "Reaction Time" is the third free daily-engagement candidate alongside Finger Tapping and Blink-Rate Check &mdash; a plain 5-trial tap-the-green-box game, reported as median and best time only, with false starts flagged and excluded from those figures rather than silently dropped. "Heart Rate &mdash; SQI+FFT" is an alternative analysis pipeline being A/B tested against "Heart &amp; Breath Signal", not a replacement for it &mdash; both stay in the app until one wins out. "Heart Recovery Speed", "Cardio Response Test", "Chest Breathing Scan", and "Walking Endurance" are new, first-pass spikes built from a feasibility study of what else a phone's camera/mic/accelerometer could measure &mdash; see <code>new-tests-engineering-spike-log.md</code> for what each one does and why (including why the first two are separate tools rather than one combined check; those internal build names were "Heart &amp; Breath Recovery Check" and "Guided Submaximal Fitness Test," respectively), and none of the four has real-device data behind its thresholds yet (each says so on its own page). "Single-Leg Balance" and "Sit-to-Stand Performance" close a gap flagged in the Body Check engagement plan: both are part of the already-ratified V1 movement battery and already appear in the published Body Check home-screen mockup, but neither had a working capture tool until now. Both started as self-timed/self-counted (Start/Stop and tap-to-count buttons) and were then upgraded to camera-based automatic detection (v2.0.0) &mdash; Sit-to-Stand counts reps by tracking hip height through each stand/sit cycle (pose landmarks, same model family as Gait Speed/ROM), Single-Leg Balance watches all four things that end a trial per the Springer protocol (arms uncrossing, raised foot moving, stance foot pivoting, and on eyes-closed trials, eyes opening via face tracking). Both keep a manual backup (a "correct the count" stepper for Sit-to-Stand, an "I lost balance" tap for Balance) since neither auto-detector has been checked against real trials yet. No graded scoring is shown on either page, only the raw captured numbers, consistent with every other tool here &mdash; Sit-to-Stand's norms (McKay 2017) are confirmed and ready for the scoring engine, while Single-Leg Balance's norms (Springer 2007) still have an open age-band/SD question logged in <code>single-leg-balance-springer-2007.md</code>. "Finger Tapping" and "Blink-Rate Check" are candidate tests for the free daily-engagement rotation, not part of the clinical battery &mdash; see <code>body-check-engagement-execution-plan.md</code> §1. Finger Tapping is a plain on-screen tap counter, no camera. Blink-Rate Check uses the same on-device face tracking now shared with Single-Leg Balance's eyes channel &mdash; explicitly uncalibrated (fixed open/close thresholds, not yet checked against a human-reviewed video count) and, like every camera-based tool on this page, not yet run on a real device.
 </footer>
 
 </div>
@@ -2255,6 +2294,54 @@ body.lightpanel { background: #ffffff; }
 <section>
   <h2>Diagnostics <span class="pill wait" id="bl_verPill"></span></h2>
   <textarea id="bl_diagLog" readonly></textarea>
+</section>
+
+</div>
+
+
+<div class="page panel-reaction" data-page="reaction" hidden>
+<a class="back-link" href="#home">&larr; All tests</a>
+
+
+<h1>Reaction Time</h1>
+<p class="sub">Tap the box the instant it turns green — five trials, reported as your own median and best time only.</p>
+
+<div class="caveat">
+  <b>Wait for green before you tap.</b> Tapping early doesn't count against you, but it doesn't count as a real trial either — it's flagged and excluded from your median and best time. This is a plain reflex game, not a clinical reaction-time or attention screening of any kind.
+</div>
+
+<section>
+  <h2>1 · Test</h2>
+  <button id="rt_startBtn" class="btn-primary">Start test (5 trials)</button>
+  <div class="rt-stage" id="rt_stage">Tap Start above</div>
+  <p class="hint" id="rt_flag" style="display:none;"></p>
+</section>
+
+<section id="rt_resultsSec" style="display:none;">
+  <h2>2 · Result</h2>
+  <div class="result-grid">
+    <div class="result-card"><div class="lbl">Trials</div><div class="val" id="rt_resTrials">—</div></div>
+    <div class="result-card"><div class="lbl">Median</div><div class="val" id="rt_resMedian">—</div></div>
+    <div class="result-card"><div class="lbl">Best</div><div class="val" id="rt_resBest">—</div></div>
+  </div>
+  <button id="rt_resetBtn" class="btn-secondary" style="margin-top:10px;">Start a new trial</button>
+</section>
+
+<section>
+  <h2>Trial log</h2>
+  <div class="table-scroll">
+    <table id="rt_logTable">
+      <thead><tr><th>#</th><th>Result</th><th>Time (ms)</th><th>Notes</th></tr></thead>
+      <tbody id="rt_logBody"></tbody>
+    </table>
+  </div>
+  <button id="rt_exportBtn" class="btn-secondary" style="margin-top:10px;">Export CSV</button>
+  <button id="rt_exportDiagBtn" class="btn-secondary">Export diagnostics log</button>
+</section>
+
+<section>
+  <h2>Diagnostics <span class="pill wait" id="rt_verPill"></span></h2>
+  <textarea id="rt_diagLog" readonly></textarea>
 </section>
 
 </div>
@@ -9578,9 +9665,168 @@ $("bl_exportTraceBtn").addEventListener("click", () => {
 </script>
 
 
+<script type="module">
+
+const $ = (id) => document.getElementById(id);
+const APP_VERSION = "1.0.0";
+const PLATFORM = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream ? "iOS"
+  : /Android/.test(navigator.userAgent) ? "Android" : "Desktop";
+$("rt_verPill").textContent = "v" + APP_VERSION + " · " + PLATFORM;
+
+let rtDiagLines = [];
+function rtDiag(msg) {
+  const line = new Date().toISOString().slice(11, 19) + "  " + msg;
+  rtDiagLines.push(line);
+  console.log("[DIAG]", line);
+  const el = $("rt_diagLog");
+  if (el) { el.textContent += line + "\n"; el.scrollTop = el.scrollHeight; }
+}
+window.addEventListener("error", (e) => rtDiag("JS ERROR: " + (e.message || e) + (e.filename ? ` @ ${e.filename}:${e.lineno}` : "")));
+window.addEventListener("unhandledrejection", (e) => rtDiag("UNHANDLED PROMISE REJECTION: " + (e.reason && e.reason.message ? e.reason.message : e.reason)));
+rtDiag("App version: " + APP_VERSION + " | Platform: " + PLATFORM);
+rtDiag("Page loaded. UA: " + navigator.userAgent);
+
+const RT_MAX_TRIALS = 5;
+const RT_MIN_DELAY_MS = 1000;
+const RT_MAX_DELAY_MS = 4000;
+let rtPhase = "idle"; // idle | armed | go
+let rtArmedAt = null;
+let rtWaitTimer = null;
+let rtCurrentTrials = []; // this session's trials: {n, result, ms}
+let rtSessions = [];      // completed sessions, for export/log rows
+
+function rtMedian(arr) {
+  if (!arr.length) return null;
+  const s = [...arr].sort((a, b) => a - b);
+  const mid = Math.floor(s.length / 2);
+  return s.length % 2 ? s[mid] : Math.round((s[mid - 1] + s[mid]) / 2);
+}
+
+function rtSetStage(phase, label, bg) {
+  rtPhase = phase;
+  const stage = $("rt_stage");
+  stage.textContent = label;
+  stage.style.background = bg;
+}
+
+function rtArmNext() {
+  $("rt_flag").style.display = "none";
+  if (rtCurrentTrials.length >= RT_MAX_TRIALS) {
+    rtFinishSession();
+    return;
+  }
+  rtSetStage("armed", "Wait for green…", "var(--warn)");
+  const delay = RT_MIN_DELAY_MS + Math.random() * (RT_MAX_DELAY_MS - RT_MIN_DELAY_MS);
+  rtDiag(`Trial ${rtCurrentTrials.length + 1}: armed, delay=${Math.round(delay)}ms`);
+  rtWaitTimer = setTimeout(() => {
+    rtArmedAt = performance.now();
+    rtSetStage("go", "TAP NOW", "#2f6f4f");
+    rtDiag(`Trial ${rtCurrentTrials.length + 1}: went green`);
+  }, delay);
+}
+
+function rtHandleTap() {
+  if (rtPhase === "idle") return; // Start button controls session start, not the stage itself
+  if (rtPhase === "armed") {
+    clearTimeout(rtWaitTimer);
+    rtCurrentTrials.push({ n: rtCurrentTrials.length + 1, result: "false_start", ms: null });
+    rtDiag(`Trial ${rtCurrentTrials.length}: FALSE START (tapped before green)`);
+    $("rt_flag").style.display = "block";
+    $("rt_flag").textContent = "Tapped too early — that one doesn't count toward your median. Next trial starting…";
+    setTimeout(rtArmNext, 900);
+    return;
+  }
+  if (rtPhase === "go") {
+    const ms = Math.round(performance.now() - rtArmedAt);
+    rtCurrentTrials.push({ n: rtCurrentTrials.length + 1, result: "hit", ms });
+    rtDiag(`Trial ${rtCurrentTrials.length}: hit, ${ms}ms`);
+    rtSetStage("idle", `${ms} ms — next trial in a moment…`, "var(--accent)");
+    setTimeout(rtArmNext, 700);
+  }
+}
+
+$("rt_stage").addEventListener("click", rtHandleTap);
+
+$("rt_startBtn").addEventListener("click", () => {
+  clearTimeout(rtWaitTimer);
+  rtCurrentTrials = [];
+  $("rt_resultsSec").style.display = "none";
+  $("rt_flag").style.display = "none";
+  rtDiag("Session started.");
+  rtArmNext();
+});
+
+function rtFinishSession() {
+  rtSetStage("idle", "All 5 trials complete — Start to try again", "var(--accent)");
+  const hits = rtCurrentTrials.filter(t => t.result === "hit").map(t => t.ms);
+  const median = rtMedian(hits);
+  const best = hits.length ? Math.min(...hits) : null;
+
+  $("rt_resultsSec").style.display = "block";
+  $("rt_resTrials").textContent = rtCurrentTrials.length;
+  $("rt_resMedian").textContent = median != null ? median + "ms" : "—";
+  $("rt_resBest").textContent = best != null ? best + "ms" : "—";
+
+  rtDiag(`Session finished. trials=${rtCurrentTrials.length} hits=${hits.length} median=${median ?? "n/a"}ms best=${best ?? "n/a"}ms`);
+  rtSessions.push({ trials: [...rtCurrentTrials], median, best, notes: "" });
+  rtRenderLog();
+}
+
+$("rt_resetBtn").addEventListener("click", () => {
+  $("rt_resultsSec").style.display = "none";
+  rtSetStage("idle", "Tap Start above", "var(--accent)");
+});
+
+function rtRenderLog() {
+  const body = $("rt_logBody");
+  body.innerHTML = "";
+  rtSessions.forEach((s, si) => {
+    s.trials.forEach((t, ti) => {
+      const tr = document.createElement("tr");
+      const isLastOfSession = ti === s.trials.length - 1;
+      tr.innerHTML = `
+        <td>${si + 1}.${t.n}</td>
+        <td>${t.result === "hit" ? "hit" : "false start"}</td>
+        <td>${t.ms ?? "—"}</td>
+        <td>${isLastOfSession ? `median ${s.median ?? "—"}ms / best ${s.best ?? "—"}ms` : ""}</td>
+      `;
+      body.appendChild(tr);
+    });
+  });
+}
+
+$("rt_exportBtn").addEventListener("click", () => {
+  const header = ["session", "trial", "result", "reaction_ms", "session_median_ms", "session_best_ms", "app_version", "platform"];
+  const rows = [];
+  rtSessions.forEach((s, si) => {
+    s.trials.forEach((t) => {
+      rows.push([si + 1, t.n, t.result, t.ms ?? "", s.median ?? "", s.best ?? "", APP_VERSION, PLATFORM].join(","));
+    });
+  });
+  const csv = [header.join(","), ...rows].join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `reaction-time-web-spike-results-v${APP_VERSION}-${PLATFORM}-${Date.now()}.csv`;
+  a.click();
+  rtDiag("CSV exported. sessions=" + rtSessions.length);
+});
+
+$("rt_exportDiagBtn").addEventListener("click", () => {
+  const blob = new Blob([rtDiagLines.join("\n")], { type: "text/plain" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = `reaction-time-diagnostics-v${APP_VERSION}-${PLATFORM}-${Date.now()}.txt`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+});
+
+</script>
+
+
 <script>
   function showPage(hash) {
-    var valid = ["home", "gait", "heart", "rom", "lung", "heartsqi", "recovery", "submax", "breath", "walk", "balance", "sts", "fingertap", "blink"];
+    var valid = ["home", "gait", "heart", "rom", "lung", "heartsqi", "recovery", "submax", "breath", "walk", "balance", "sts", "fingertap", "blink", "reaction"];
     var id = (hash || "").replace(/^#/, "");
     var page = valid.indexOf(id) !== -1 ? id : "home";
     document.querySelectorAll(".page").forEach(function (el) {
