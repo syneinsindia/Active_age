@@ -635,6 +635,7 @@ body.lightpanel { background: #ffffff; }
 .panel-recovery th { background: var(--paper); font-weight: 600; }
 .panel-recovery .table-scroll { overflow-x: auto; }
 .panel-recovery input.notes-in { width: 90px; padding: 3px 4px; font-size: 0.72rem; margin: 0; text-align: left; }
+.panel-recovery input.log-input { width: 55px; padding: 3px 4px; font-size: 0.72rem; margin: 0; text-align: right; }
 .panel-recovery textarea#diagLog { width: 100%; height: 140px; font-family: var(--mono); font-size: 0.68rem; background: #111; color: #9fe0a8; border-radius: 6px; padding: 8px; white-space: pre-wrap; }
 .panel-recovery .caveat { background: #fdf7e3; border: 1px solid #e7d79a; border-radius: 8px; padding: 10px; font-size: 0.78rem; line-height: 1.5; margin-bottom: 10px; color: #5a4a1f; }
 .panel-submax h1 { font-size: 1.15rem; margin: 0 0 4px; }
@@ -688,6 +689,7 @@ body.lightpanel { background: #ffffff; }
 .panel-submax th { background: var(--paper); font-weight: 600; }
 .panel-submax .table-scroll { overflow-x: auto; }
 .panel-submax input.notes-in { width: 90px; padding: 3px 4px; font-size: 0.72rem; margin: 0; text-align: left; }
+.panel-submax input.log-input { width: 55px; padding: 3px 4px; font-size: 0.72rem; margin: 0; text-align: right; }
 .panel-submax textarea#diagLog { width: 100%; height: 140px; font-family: var(--mono); font-size: 0.68rem; background: #111; color: #9fe0a8; border-radius: 6px; padding: 8px; white-space: pre-wrap; }
 .panel-submax .caveat { background: #fdf7e3; border: 1px solid #e7d79a; border-radius: 8px; padding: 10px; font-size: 0.78rem; line-height: 1.5; margin-bottom: 10px; color: #5a4a1f; }
 .panel-breath details summary { cursor: pointer; font-weight: 600; font-size: 0.85rem; }
@@ -997,7 +999,7 @@ body.lightpanel { background: #ffffff; }
 </head>
 <body>
 
-<div id="buildBanner"><div class="inner" title="Build 43 · 2026-09-24 · Heart & Breath Recovery Check (rc panel, v1.0.7) + Guided Submaximal Fitness Test / Cardio Response Test (sm panel, v1.0.8): ported the live coverage pill and contact-steadiness meter from Heart & Breath Signal (#heart) into both PPG-capture panels. Motivated by a real same-session, same-device comparison: this pair failed baseline capture 3/3 times ('too few heartbeats') while Heart & Breath Signal and Heart Rate SQI+FFT both succeeded on the very first try, minutes later, on the same finger. The working panels give real-time feedback during capture (a coverage pill showing covering-lens/not-covered/too-dark, an amplitude meter with a coaching caption — 'press firmer', 'hold still', 'good') so bad contact gets corrected as it happens; this pair previously captured blind and only reported pass/fail at the end. Both panels now run the same live-feedback loop, and their diagnostics gain the same Coverage-sample/Pulse-amplitude-sample/COVERAGE-LOST/WEAK-SIGNAL logging Heart & Breath Signal already had. No change to analyzePulse/analyzeRespiration detection logic, step counting, or metronome timing. Was Build 42: breathing rate (RR) is now a bonus-when-available reading, not a required one. Was Build 41: baseline capture extended 20s→45s, minimum breathing-cycle peaks raised 2→3. Was Build 40: added the breathing-peaks coverage check and tightened the accepted rate range.">Build 43 &middot; 2026-09-24 &middot; Recovery Check + Cardio Response Test: added the same live coverage/steadiness feedback Heart &amp; Breath Signal already has, so contact issues can be caught and fixed during capture</div></div>
+<div id="buildBanner"><div class="inner" title="Build 44 · 2026-09-24 · Heart & Breath Recovery Check (rc panel, v1.0.8) + Guided Submaximal Fitness Test / Cardio Response Test (sm panel, v1.0.9): added optional per-phase reference-HR fields to both panels' trial logs (Ref Base/Imm/60s HR for rc, Ref Base/Post HR for sm), each with an auto-computed vs-reference % column, matching the reference-HR field already present on Heart & Breath Signal / Heart Rate SQI+FFT but extended to one field per capture phase since these two panels take multiple HR readings per trial. Motivated by the finding that no ground-truth calibration has ever been performed for pulse bpm anywhere in this project — every reading validated so far has been cross-tool internal consistency, which is weaker evidence since three of the four PPG tools share near-identical algorithm lineage. Left blank, the new fields change nothing; filled in, they let a session be checked against an independent reference device (e.g. a fingertip pulse oximeter) at rest and after exertion, not just once. Included in CSV export. No change to analyzePulse/analyzeRespiration detection logic, capture UX, step counting, or diagnostics. Was Build 43: ported the live coverage pill and contact-steadiness meter from Heart & Breath Signal (#heart) into both PPG-capture panels. Motivated by a real same-session, same-device comparison: this pair failed baseline capture 3/3 times ('too few heartbeats') while Heart & Breath Signal and Heart Rate SQI+FFT both succeeded on the very first try, minutes later, on the same finger. The working panels give real-time feedback during capture (a coverage pill showing covering-lens/not-covered/too-dark, an amplitude meter with a coaching caption — 'press firmer', 'hold still', 'good') so bad contact gets corrected as it happens; this pair previously captured blind and only reported pass/fail at the end. Both panels now run the same live-feedback loop, and their diagnostics gain the same Coverage-sample/Pulse-amplitude-sample/COVERAGE-LOST/WEAK-SIGNAL logging Heart & Breath Signal already had. No change to analyzePulse/analyzeRespiration detection logic, step counting, or metronome timing. Was Build 42: breathing rate (RR) is now a bonus-when-available reading, not a required one. Was Build 41: baseline capture extended 20s→45s, minimum breathing-cycle peaks raised 2→3. Was Build 40: added the breathing-peaks coverage check and tightened the accepted rate range.">Build 44 &middot; 2026-09-24 &middot; Recovery Check + Cardio Response Test: added optional per-phase reference-HR fields so readings can be checked against an independent device like a pulse oximeter</div></div>
 
 <div class="page home-wrap" data-page="home">
 
@@ -1767,7 +1769,7 @@ body.lightpanel { background: #ffffff; }
   <div class="table-scroll">
     <table id="rc_logTable">
       <thead><tr>
-        <th>#</th><th>Base HR</th><th>Base RR</th><th>Dur (s)</th><th>Imm HR</th><th>Imm RR</th><th>60s HR</th><th>60s RR</th><th>HRR</th><th>RRR</th><th>Notes</th>
+        <th>#</th><th>Base HR</th><th>Ref Base HR</th><th>Base HR %</th><th>Base RR</th><th>Dur (s)</th><th>Imm HR</th><th>Ref Imm HR</th><th>Imm HR %</th><th>Imm RR</th><th>60s HR</th><th>Ref 60s HR</th><th>60s HR %</th><th>60s RR</th><th>HRR</th><th>RRR</th><th>Notes</th>
       </tr></thead>
       <tbody id="rc_logBody"></tbody>
     </table>
@@ -1776,6 +1778,7 @@ body.lightpanel { background: #ffffff; }
   <button id="rc_exportDiagBtn" class="btn-secondary">Export diagnostics log</button>
   <button id="rc_exportTraceBtn" class="btn-secondary">Export raw trace</button>
   <p class="hint">The raw trace is a frame-by-frame log of the raw fingertip-camera signal for every baseline/immediate/60s capture this session, labeled by capture and trial — this is what a "why did this reading fail" investigation actually needs (the summary CSV above only has the final numbers). Export it before leaving the page.</p>
+  <p class="hint">The "Ref" columns are optional — type in a heart rate from an independent reference device (a pulse oximeter, chest strap, or a manual count) taken at the same moment as that capture, and the % column shows how far this app's reading was from it. Left blank, they change nothing. Since this test's whole point is a recovery curve, a reference reading at both the immediate and 60s points (not just baseline) is what actually validates it.</p>
 </section>
 
 <section>
@@ -1878,7 +1881,7 @@ body.lightpanel { background: #ffffff; }
   <div class="table-scroll">
     <table id="sm_logTable">
       <thead><tr>
-        <th>#</th><th>Base HR</th><th>Base RR</th><th>Bout (s)</th><th>Steps</th><th>Cadence</th><th>Post HR</th><th>Post RR</th><th>HR resp</th><th>RR resp</th><th>Notes</th>
+        <th>#</th><th>Base HR</th><th>Ref Base HR</th><th>Base HR %</th><th>Base RR</th><th>Bout (s)</th><th>Steps</th><th>Cadence</th><th>Post HR</th><th>Ref Post HR</th><th>Post HR %</th><th>Post RR</th><th>HR resp</th><th>RR resp</th><th>Notes</th>
       </tr></thead>
       <tbody id="sm_logBody"></tbody>
     </table>
@@ -1887,6 +1890,7 @@ body.lightpanel { background: #ffffff; }
   <button id="sm_exportDiagBtn" class="btn-secondary">Export diagnostics log</button>
   <button id="sm_exportTraceBtn" class="btn-secondary">Export raw trace</button>
   <p class="hint">The raw trace is a frame-by-frame log of the raw fingertip-camera signal for every baseline/post-bout capture this session, labeled by capture and trial — this is what a "why did this reading fail" investigation actually needs (the summary CSV above only has the final numbers). Export it before leaving the page.</p>
+  <p class="hint">The "Ref" columns are optional — type in a heart rate from an independent reference device (a pulse oximeter, chest strap, or a manual count) taken at the same moment as that capture, and the % column shows how far this app's reading was from it. Left blank, they change nothing. This test compares a rest reading to a post-exertion reading, so a reference at both points is what actually validates it, not just at baseline.</p>
 </section>
 
 <section>
@@ -5925,7 +5929,7 @@ $("s_exportBtn").addEventListener("click", () => {
 const $ = (id) => document.getElementById(id);
 const video = $("rc_video");
 
-const APP_VERSION = "1.0.7"; // 1.0.7: ported the live coverage pill + contact-steadiness meter from Heart & Breath Signal (#heart) — a same-session, same-device comparison showed this panel failing baseline 3/3 times on "too few heartbeats" while Heart & Breath Signal and Heart Rate SQI+FFT both succeeded on the first try minutes later; the concrete difference was that those two give real-time feedback (a coverage pill, an amplitude meter with a coaching caption) during capture so bad contact can be corrected as it happens, while this panel captured blind and only reported pass/fail at the end. Both captures now run through the same live-feedback loop, and the diagnostics also gain the "Coverage sample"/"Pulse amplitude sample"/"COVERAGE LOST"/"WEAK SIGNAL" logging that panel already had, closing the gap where a failed capture here couldn't be explained the way one there could. No change to analyzePulse/analyzeRespiration detection logic — this is capture-time UX and diagnostics only. Was 1.0.6: breathing rate (RR) treated as bonus-when-available, not required. Was 1.0.5: baseline extended 20s→45s, peak requirement 2→3. Was 1.0.4: coverage check + tightened rate range. Was 1.0.3: reason string + raw trace export. Was 1.0.2: diagnostics log now includes pulse.reason. Was 1.0.1: fixed "Start a new trial" crashing. Was 1.0.0: initial spike build.
+const APP_VERSION = "1.0.8"; // 1.0.8: added optional per-phase reference-HR fields (Ref Base HR, Ref Imm HR, Ref 60s HR) to the trial log, each with an auto-computed vs-reference % column, matching the reference-HR field already present on Heart & Breath Signal / Heart Rate SQI+FFT. Motivated by the finding that no ground-truth calibration has ever been performed for pulse bpm in this project — only cross-tool internal consistency, which is weaker evidence since three of the four PPG tools share near-identical algorithm lineage. Unlike the single-field pattern on the other two panels, this panel gets one reference field per capture phase (baseline/immediate/60s) since a recovery curve needs to be validated at more than one point, not just at rest. Left blank, the new fields change nothing; included in CSV export. No change to analyzePulse/analyzeRespiration detection logic, step counting, capture UX, or diagnostics. Was 1.0.7: ported the live coverage pill + contact-steadiness meter from Heart & Breath Signal (#heart) — a same-session, same-device comparison showed this panel failing baseline 3/3 times on "too few heartbeats" while Heart & Breath Signal and Heart Rate SQI+FFT both succeeded on the first try minutes later; the concrete difference was that those two give real-time feedback (a coverage pill, an amplitude meter with a coaching caption) during capture so bad contact can be corrected as it happens, while this panel captured blind and only reported pass/fail at the end. Both captures now run through the same live-feedback loop, and the diagnostics also gain the "Coverage sample"/"Pulse amplitude sample"/"COVERAGE LOST"/"WEAK SIGNAL" logging that panel already had, closing the gap where a failed capture here couldn't be explained the way one there could. No change to analyzePulse/analyzeRespiration detection logic — this is capture-time UX and diagnostics only. Was 1.0.6: breathing rate (RR) treated as bonus-when-available, not required. Was 1.0.5: baseline extended 20s→45s, peak requirement 2→3. Was 1.0.4: coverage check + tightened rate range. Was 1.0.3: reason string + raw trace export. Was 1.0.2: diagnostics log now includes pulse.reason. Was 1.0.1: fixed "Start a new trial" crashing. Was 1.0.0: initial spike build.
 const PLATFORM = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream ? "iOS"
   : /Android/.test(navigator.userAgent) ? "Android" : "Desktop";
 $("rc_verPill").textContent = "v" + APP_VERSION + " · " + PLATFORM;
@@ -6382,7 +6386,7 @@ $("rc_saveTrialBtn").addEventListener("click", () => {
   trials.push({
     baseHr: baseline.hr, baseRr: baseline.rr, durS: exertionDurS,
     immHr: recImm.hr, immRr: recImm.rr, r60Hr: rec60.hr, r60Rr: rec60.rr,
-    hrr, rrr, notes: ""
+    hrr, rrr, refBaseHr: null, refImmHr: null, refR60Hr: null, notes: ""
   });
   renderLog();
   diag("Trial saved. total trials=" + trials.length);
@@ -6413,31 +6417,53 @@ function fmtDelta(v, d) {
   return (v >= 0 ? "-" : "+") + rounded.toFixed(d);
 }
 
+function pctDiff(measured, ref) {
+  return (measured != null && ref) ? (((measured - ref) / ref) * 100).toFixed(1) : "";
+}
+
 function renderLog() {
   const body = $("rc_logBody");
   body.innerHTML = "";
   trials.forEach((t, i) => {
+    const basePct = pctDiff(t.baseHr, t.refBaseHr);
+    const immPct = pctDiff(t.immHr, t.refImmHr);
+    const r60Pct = pctDiff(t.r60Hr, t.refR60Hr);
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td>${i + 1}</td>
-      <td>${fmt(t.baseHr, 0)}</td><td>${fmt(t.baseRr)}</td><td>${t.durS}</td>
-      <td>${fmt(t.immHr, 0)}</td><td>${fmt(t.immRr)}</td>
-      <td>${fmt(t.r60Hr, 0)}</td><td>${fmt(t.r60Rr)}</td>
+      <td>${fmt(t.baseHr, 0)}</td>
+      <td><input class="log-input" type="number" data-i="${i}" data-f="refBaseHr" value="${t.refBaseHr ?? ""}"></td>
+      <td>${basePct}</td>
+      <td>${fmt(t.baseRr)}</td><td>${t.durS}</td>
+      <td>${fmt(t.immHr, 0)}</td>
+      <td><input class="log-input" type="number" data-i="${i}" data-f="refImmHr" value="${t.refImmHr ?? ""}"></td>
+      <td>${immPct}</td>
+      <td>${fmt(t.immRr)}</td>
+      <td>${fmt(t.r60Hr, 0)}</td>
+      <td><input class="log-input" type="number" data-i="${i}" data-f="refR60Hr" value="${t.refR60Hr ?? ""}"></td>
+      <td>${r60Pct}</td>
+      <td>${fmt(t.r60Rr)}</td>
       <td>${fmt(t.hrr, 0)}</td><td>${fmt(t.rrr)}</td>
-      <td><input class="notes-in" data-i="${i}" type="text" value="${t.notes || ""}"></td>
+      <td><input class="notes-in" data-i="${i}" data-f="notes" type="text" value="${t.notes || ""}"></td>
     `;
     body.appendChild(tr);
   });
-  body.querySelectorAll(".notes-in").forEach(inp => {
-    inp.addEventListener("change", (e) => { trials[+e.target.dataset.i].notes = e.target.value; });
+  body.querySelectorAll(".notes-in, .log-input").forEach(inp => {
+    inp.addEventListener("change", (e) => {
+      const i = +e.target.dataset.i, f = e.target.dataset.f;
+      trials[i][f] = f === "notes" ? e.target.value : (parseFloat(e.target.value) || null);
+      renderLog();
+    });
   });
 }
 
 $("rc_exportBtn").addEventListener("click", () => {
-  const header = ["trial","baseline_hr","baseline_rr","activity_duration_s","immediate_hr","immediate_rr","hr_60s","rr_60s","hrr_1min","rr_recovery_1min","notes","app_version","platform"];
+  const header = ["trial","baseline_hr","baseline_hr_reference","baseline_hr_vs_reference_pct","baseline_rr","activity_duration_s","immediate_hr","immediate_hr_reference","immediate_hr_vs_reference_pct","immediate_rr","hr_60s","hr_60s_reference","hr_60s_vs_reference_pct","rr_60s","hrr_1min","rr_recovery_1min","notes","app_version","platform"];
   const rows = trials.map((t, i) => [
-    i + 1, fmt(t.baseHr, 1), fmt(t.baseRr), t.durS, fmt(t.immHr, 1), fmt(t.immRr),
-    fmt(t.r60Hr, 1), fmt(t.r60Rr), fmt(t.hrr, 1), fmt(t.rrr), (t.notes || "").replace(/,/g, ";"), APP_VERSION, PLATFORM
+    i + 1, fmt(t.baseHr, 1), t.refBaseHr ?? "", pctDiff(t.baseHr, t.refBaseHr), fmt(t.baseRr), t.durS,
+    fmt(t.immHr, 1), t.refImmHr ?? "", pctDiff(t.immHr, t.refImmHr), fmt(t.immRr),
+    fmt(t.r60Hr, 1), t.refR60Hr ?? "", pctDiff(t.r60Hr, t.refR60Hr), fmt(t.r60Rr),
+    fmt(t.hrr, 1), fmt(t.rrr), (t.notes || "").replace(/,/g, ";"), APP_VERSION, PLATFORM
   ].join(","));
   const csv = [header.join(","), ...rows].join("\n");
   const blob = new Blob([csv], { type: "text/csv" });
@@ -6467,7 +6493,7 @@ $("rc_exportTraceBtn").addEventListener("click", () => {
 const $ = (id) => document.getElementById(id);
 const video = $("sm_video");
 
-const APP_VERSION = "1.0.8"; // 1.0.8: ported the live coverage pill + contact-steadiness meter from Heart & Breath Signal (#heart) — a same-session, same-device comparison showed this panel failing baseline 3/3 times on "too few heartbeats" while Heart & Breath Signal and Heart Rate SQI+FFT both succeeded on the first try minutes later; the concrete difference was that those two give real-time feedback (a coverage pill, an amplitude meter with a coaching caption) during capture so bad contact can be corrected as it happens, while this panel captured blind and only reported pass/fail at the end. Both baseline and post-bout captures now run through the same live-feedback loop, and the diagnostics also gain the "Coverage sample"/"Pulse amplitude sample"/"COVERAGE LOST"/"WEAK SIGNAL" logging that panel already had, closing the gap where a failed capture here couldn't be explained the way one there could. No change to analyzePulse/analyzeRespiration detection logic, step counting, or metronome timing — this is capture-time UX and diagnostics only. Was 1.0.7: breathing rate (RR) treated as bonus-when-available, not required. Was 1.0.6: baseline extended 20s→45s, peak requirement 2→3. Was 1.0.5: coverage check + tightened rate range. Was 1.0.4: reason string + raw trace export. Was 1.0.3: fixed step count reading 0 on the 2nd+ trial. Was 1.0.2: diagnostics log now includes pulse.reason. Was 1.0.1: fixed "Start a new trial" crashing. Was 1.0.0: initial spike build.
+const APP_VERSION = "1.0.9"; // 1.0.9: added optional per-phase reference-HR fields (Ref Base HR, Ref Post HR) to the trial log, each with an auto-computed vs-reference % column, matching the reference-HR field already present on Heart & Breath Signal / Heart Rate SQI+FFT. Motivated by the finding that no ground-truth calibration has ever been performed for pulse bpm in this project — only cross-tool internal consistency, which is weaker evidence since three of the four PPG tools share near-identical algorithm lineage. This panel gets one reference field per capture phase (baseline/post) so a rest reading and a post-exertion reading can each be checked against an independent device, not just baseline. Left blank, the new fields change nothing; included in CSV export. No change to analyzePulse/analyzeRespiration detection logic, step counting, capture UX, or diagnostics. Was 1.0.8: ported the live coverage pill + contact-steadiness meter from Heart & Breath Signal (#heart) — a same-session, same-device comparison showed this panel failing baseline 3/3 times on "too few heartbeats" while Heart & Breath Signal and Heart Rate SQI+FFT both succeeded on the first try minutes later; the concrete difference was that those two give real-time feedback (a coverage pill, an amplitude meter with a coaching caption) during capture so bad contact can be corrected as it happens, while this panel captured blind and only reported pass/fail at the end. Both baseline and post-bout captures now run through the same live-feedback loop, and the diagnostics also gain the "Coverage sample"/"Pulse amplitude sample"/"COVERAGE LOST"/"WEAK SIGNAL" logging that panel already had, closing the gap where a failed capture here couldn't be explained the way one there could. No change to analyzePulse/analyzeRespiration detection logic, step counting, or metronome timing — this is capture-time UX and diagnostics only. Was 1.0.7: breathing rate (RR) treated as bonus-when-available, not required. Was 1.0.6: baseline extended 20s→45s, peak requirement 2→3. Was 1.0.5: coverage check + tightened rate range. Was 1.0.4: reason string + raw trace export. Was 1.0.3: fixed step count reading 0 on the 2nd+ trial. Was 1.0.2: diagnostics log now includes pulse.reason. Was 1.0.1: fixed "Start a new trial" crashing. Was 1.0.0: initial spike build.
 const PLATFORM = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream ? "iOS"
   : /Android/.test(navigator.userAgent) ? "Android" : "Desktop";
 $("sm_verPill").textContent = "v" + APP_VERSION + " · " + PLATFORM;
@@ -6973,7 +6999,7 @@ $("sm_saveTrialBtn").addEventListener("click", () => {
   const rrResp = (baseline.rr != null && post.rr != null) ? (post.rr - baseline.rr) : null;
   trials.push({
     baseHr: baseline.hr, baseRr: baseline.rr, boutDurS, steps: stepCount, cadence: boutCadence,
-    postHr: post.hr, postRr: post.rr, hrResp, rrResp, notes: ""
+    postHr: post.hr, postRr: post.rr, hrResp, rrResp, refBaseHr: null, refPostHr: null, notes: ""
   });
   renderLog();
   diag("Trial saved. total trials=" + trials.length);
@@ -7002,31 +7028,48 @@ function fmtDelta(v, d) {
   return (v >= 0 ? "+" : "-") + rounded.toFixed(d); // a rise from baseline is the expected "+" direction here
 }
 
+function pctDiff(measured, ref) {
+  return (measured != null && ref) ? (((measured - ref) / ref) * 100).toFixed(1) : "";
+}
+
 function renderLog() {
   const body = $("sm_logBody");
   body.innerHTML = "";
   trials.forEach((t, i) => {
+    const basePct = pctDiff(t.baseHr, t.refBaseHr);
+    const postPct = pctDiff(t.postHr, t.refPostHr);
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td>${i + 1}</td>
-      <td>${fmt(t.baseHr, 0)}</td><td>${fmt(t.baseRr)}</td><td>${t.boutDurS}</td>
+      <td>${fmt(t.baseHr, 0)}</td>
+      <td><input class="log-input" type="number" data-i="${i}" data-f="refBaseHr" value="${t.refBaseHr ?? ""}"></td>
+      <td>${basePct}</td>
+      <td>${fmt(t.baseRr)}</td><td>${t.boutDurS}</td>
       <td>${t.steps}</td><td>${fmt(t.cadence, 0)}</td>
-      <td>${fmt(t.postHr, 0)}</td><td>${fmt(t.postRr)}</td>
+      <td>${fmt(t.postHr, 0)}</td>
+      <td><input class="log-input" type="number" data-i="${i}" data-f="refPostHr" value="${t.refPostHr ?? ""}"></td>
+      <td>${postPct}</td>
+      <td>${fmt(t.postRr)}</td>
       <td>${fmt(t.hrResp, 0)}</td><td>${fmt(t.rrResp)}</td>
-      <td><input class="notes-in" data-i="${i}" type="text" value="${t.notes || ""}"></td>
+      <td><input class="notes-in" data-i="${i}" data-f="notes" type="text" value="${t.notes || ""}"></td>
     `;
     body.appendChild(tr);
   });
-  body.querySelectorAll(".notes-in").forEach(inp => {
-    inp.addEventListener("change", (e) => { trials[+e.target.dataset.i].notes = e.target.value; });
+  body.querySelectorAll(".notes-in, .log-input").forEach(inp => {
+    inp.addEventListener("change", (e) => {
+      const i = +e.target.dataset.i, f = e.target.dataset.f;
+      trials[i][f] = f === "notes" ? e.target.value : (parseFloat(e.target.value) || null);
+      renderLog();
+    });
   });
 }
 
 $("sm_exportBtn").addEventListener("click", () => {
-  const header = ["trial","baseline_hr","baseline_rr","bout_duration_s","steps","avg_cadence_per_min","post_hr","post_rr","hr_response","rr_response","notes","app_version","platform"];
+  const header = ["trial","baseline_hr","baseline_hr_reference","baseline_hr_vs_reference_pct","baseline_rr","bout_duration_s","steps","avg_cadence_per_min","post_hr","post_hr_reference","post_hr_vs_reference_pct","post_rr","hr_response","rr_response","notes","app_version","platform"];
   const rows = trials.map((t, i) => [
-    i + 1, fmt(t.baseHr, 1), fmt(t.baseRr), t.boutDurS, t.steps, fmt(t.cadence, 1),
-    fmt(t.postHr, 1), fmt(t.postRr), fmt(t.hrResp, 1), fmt(t.rrResp), (t.notes || "").replace(/,/g, ";"), APP_VERSION, PLATFORM
+    i + 1, fmt(t.baseHr, 1), t.refBaseHr ?? "", pctDiff(t.baseHr, t.refBaseHr), fmt(t.baseRr), t.boutDurS, t.steps, fmt(t.cadence, 1),
+    fmt(t.postHr, 1), t.refPostHr ?? "", pctDiff(t.postHr, t.refPostHr), fmt(t.postRr),
+    fmt(t.hrResp, 1), fmt(t.rrResp), (t.notes || "").replace(/,/g, ";"), APP_VERSION, PLATFORM
   ].join(","));
   const csv = [header.join(","), ...rows].join("\n");
   const blob = new Blob([csv], { type: "text/csv" });
