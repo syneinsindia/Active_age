@@ -985,7 +985,7 @@ body.lightpanel { background: #ffffff; }
 </head>
 <body>
 
-<div id="buildBanner"><div class="inner" title="Build 38 · 2026-09-24 · Guided Submaximal Fitness Test / Cardio Response Test (sm panel, v1.0.3): fixed step count reading 0 on the 2nd (and every later) trial in a session — the bout-complete handler unconditionally removed the devicemotion listener, and only the one-time Enable Motion Sensor button click re-attached it, which Start a new trial never triggers again. Fix: stop removing the listener at all, matching how the Walk Endurance panel already handles it (stepCount resets to 0 at the start of every bout regardless, so leaving the listener attached across trials is safe). Confirmed via a real Android session: trial 1 correctly counted 329 steps over a 3-minute bout, trial 2 (same session, after Start a new trial) counted 0 steps despite a full 3-minute walk — exact match for the reported symptom. No detection/analysis logic touched otherwise. Was Build 37: Heart & Breath Recovery Check (rc panel, v1.0.2) + Cardio Response Test (sm panel, v1.0.2): diagnostics log now includes pulse.reason on every PPG capture. Was Build 36: fixed 'Start a new trial' crashing with a JS error on both panels (unprefixed element ids in the reset handler).">Build 38 &middot; 2026-09-24 &middot; Cardio Response Test: fixed step count reading 0 on the 2nd+ trial (motion listener wasn't reattached after reset)</div></div>
+<div id="buildBanner"><div class="inner" title="Build 39 · 2026-09-24 · Heart & Breath Recovery Check (rc panel, v1.0.3) + Guided Submaximal Fitness Test / Cardio Response Test (sm panel, v1.0.4), user-requested: analyzeRespiration() now returns a reason string on every capture, same as analyzePulse already did — logged as respReason in the diagnostics. Also added an 'Export raw trace' button on both panels, logging the raw fingertip-luminance signal (capture_seq/trial/label/t_ms/raw_v) for every capture this session, matching the pattern already used on Balance/STS/Blink-Rate/Chest Breathing — built to investigate why breathing-rate extraction fails much more often than heart-rate extraction on this signal, especially at rest. Logging/instrumentation only, no detection/analysis logic touched. Was Build 38: Cardio Response Test (sm panel, v1.0.3): fixed step count reading 0 on the 2nd+ trial in a session (devicemotion listener wasn't reattached after Start a new trial). Was Build 37: diagnostics log now includes pulse.reason on every PPG capture.">Build 39 &middot; 2026-09-24 &middot; Recovery Check + Cardio Response Test: breathing-rate failures now log a reason, plus a raw-trace export for investigating them</div></div>
 
 <div class="page home-wrap" data-page="home">
 
@@ -1754,6 +1754,8 @@ body.lightpanel { background: #ffffff; }
   </div>
   <button id="rc_exportBtn" class="btn-secondary" style="margin-top:10px;">Export CSV</button>
   <button id="rc_exportDiagBtn" class="btn-secondary">Export diagnostics log</button>
+  <button id="rc_exportTraceBtn" class="btn-secondary">Export raw trace</button>
+  <p class="hint">The raw trace is a frame-by-frame log of the raw fingertip-camera signal for every baseline/immediate/60s capture this session, labeled by capture and trial — this is what a "why did this reading fail" investigation actually needs (the summary CSV above only has the final numbers). Export it before leaving the page.</p>
 </section>
 
 <section>
@@ -1855,6 +1857,8 @@ body.lightpanel { background: #ffffff; }
   </div>
   <button id="sm_exportBtn" class="btn-secondary" style="margin-top:10px;">Export CSV</button>
   <button id="sm_exportDiagBtn" class="btn-secondary">Export diagnostics log</button>
+  <button id="sm_exportTraceBtn" class="btn-secondary">Export raw trace</button>
+  <p class="hint">The raw trace is a frame-by-frame log of the raw fingertip-camera signal for every baseline/post-bout capture this session, labeled by capture and trial — this is what a "why did this reading fail" investigation actually needs (the summary CSV above only has the final numbers). Export it before leaving the page.</p>
 </section>
 
 <section>
@@ -5893,7 +5897,7 @@ $("s_exportBtn").addEventListener("click", () => {
 const $ = (id) => document.getElementById(id);
 const video = $("rc_video");
 
-const APP_VERSION = "1.0.2"; // 1.0.2: diagnostics log now includes pulse.reason on every capture (baseline/immediate/60s), not just hr/rr/quality — a "noisy"/"no_signal" result used to give no clue why without re-deriving it from code; now it's in the exported log directly. Logging only, no detection/analysis logic touched. Was 1.0.1: fixed "Start a new trial" crashing with a JS error (Cannot read properties of null, reading 'style') — the reset handler referenced unprefixed element ids ("baselineResult" etc.) instead of the real rc_-prefixed ids, so $(id) returned null and the whole reset silently aborted after the first line. Was 1.0.0: initial spike build.
+const APP_VERSION = "1.0.3"; // 1.0.3: analyzeRespiration() now returns a reason string too (not just analyzePulse) — logged as respReason alongside the existing hr/rr/quality/reason fields on every capture; added an "Export raw trace" button that logs the raw fingertip-luminance signal (capture_seq/trial/label/t_ms/raw_v) for every baseline/immediate/60s capture this session, matching the pattern already used on Balance/STS/Blink-Rate/Chest Breathing — user-requested, to investigate why breathing-rate extraction fails much more often than heart-rate extraction on this signal. Logging/instrumentation only, no detection/analysis logic touched. Was 1.0.2: diagnostics log now includes pulse.reason on every capture. Was 1.0.1: fixed "Start a new trial" crashing with a JS error (unprefixed element ids in the reset handler). Was 1.0.0: initial spike build.
 const PLATFORM = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream ? "iOS"
   : /Android/.test(navigator.userAgent) ? "Android" : "Desktop";
 $("rc_verPill").textContent = "v" + APP_VERSION + " · " + PLATFORM;
@@ -5953,21 +5957,21 @@ function findPeaks(arr, ac, minRefractoryMs, minAmp) {
   return peaks;
 }
 function analyzeRespiration(arr) {
-  if (arr.length < 60) return { rate: null, peakCount: 0 };
+  if (arr.length < 60) return { rate: null, peakCount: 0, reason: "too few samples captured" };
   const smoothed = movingAverage(arr, 1500).map((v, i) => ({ t: arr[i].t, v }));
   const slowAc = detrend(smoothed, 12000);
   const spread = Math.max(...slowAc) - Math.min(...slowAc);
   const minAmp = spread * 0.2;
   const peaks = findPeaks(smoothed, slowAc, 1500, minAmp);
-  if (peaks.length < 2) return { rate: null, peakCount: peaks.length };
+  if (peaks.length < 2) return { rate: null, peakCount: peaks.length, reason: "too few breathing-cycle peaks detected" };
   const ibis = [];
   for (let i = 1; i < peaks.length; i++) {
     const ibi = peaks[i] - peaks[i - 1];
     if (ibi >= 1500 && ibi <= 10000) ibis.push(ibi);
   }
-  if (ibis.length < 1) return { rate: null, peakCount: peaks.length };
+  if (ibis.length < 1) return { rate: null, peakCount: peaks.length, reason: "no breath-to-breath interval fell in the plausible 6-40 breaths/min range" };
   const meanIbi = ibis.reduce((a, b) => a + b, 0) / ibis.length;
-  return { rate: 60000 / meanIbi, peakCount: peaks.length };
+  return { rate: 60000 / meanIbi, peakCount: peaks.length, reason: "" };
 }
 function analyzePulse(arr) {
   if (arr.length < 30) return { hr: null, hrv: null, peakCount: 0, quality: "no_signal", reason: "too few samples captured" };
@@ -6082,6 +6086,15 @@ let exertionEndT = null;
 let recImm = { hr: null, rr: null };
 let rec60 = { hr: null, rr: null };
 let trials = [];
+let traceRows = []; // accumulates across the whole session, like the raw-trace exports on Balance/STS/Blink-Rate/Chest Breathing
+let captureSeq = 0;
+function recordTrace(label, samples) {
+  captureSeq++;
+  const trialNum = trials.length + 1;
+  const t0 = samples.length ? samples[0].t : 0;
+  samples.forEach(s => traceRows.push({ seq: captureSeq, trial: trialNum, label, t_ms: Math.round(s.t - t0), raw_v: s.v.toFixed(3) }));
+  diag("Raw trace captured (" + label + "). seq=" + captureSeq + " samples=" + samples.length);
+}
 
 $("rc_startCameraBtn").addEventListener("click", async () => {
   try {
@@ -6099,12 +6112,13 @@ $("rc_baselineBtn").addEventListener("click", async () => {
   const samples = await runPpgCapture(20000, $("rc_baselineTimer"));
   const pulse = analyzePulse(samples);
   const resp = analyzeRespiration(samples);
+  recordTrace("baseline", samples);
   baseline = { hr: pulse.hr, rr: resp.rate };
   $("rc_baselineResult").style.display = "grid";
   $("rc_baseHrVal").textContent = pulse.hr != null ? pulse.hr.toFixed(0) + " bpm" : "—";
   $("rc_baseRrVal").textContent = resp.rate != null ? resp.rate.toFixed(1) + "/min" : "—";
   $("rc_baseStatusVal").textContent = pulse.quality === "good" ? "good" : (pulse.reason || pulse.quality);
-  diag("Baseline capture: hr=" + pulse.hr + " rr=" + resp.rate + " quality=" + pulse.quality + " reason=\"" + (pulse.reason || "") + "\"");
+  diag("Baseline capture: hr=" + pulse.hr + " rr=" + resp.rate + " quality=" + pulse.quality + " reason=\"" + (pulse.reason || "") + "\" respReason=\"" + (resp.reason || "") + "\"");
   $("rc_baselineHint").textContent = pulse.quality === "good"
     ? "Baseline captured. Move to step 2 when ready."
     : "Baseline reading wasn't clean (" + (pulse.reason || pulse.quality) + ") — you can retry or continue anyway.";
@@ -6141,12 +6155,13 @@ $("rc_recImmBtn").addEventListener("click", async () => {
   const samples = await runPpgCapture(15000, $("rc_recImmTimer"));
   const pulse = analyzePulse(samples);
   const resp = analyzeRespiration(samples);
+  recordTrace("immediate", samples);
   recImm = { hr: pulse.hr, rr: resp.rate };
   $("rc_recImmResult").style.display = "grid";
   $("rc_recImmHrVal").textContent = pulse.hr != null ? pulse.hr.toFixed(0) + " bpm" : "—";
   $("rc_recImmRrVal").textContent = resp.rate != null ? resp.rate.toFixed(1) + "/min" : "—";
   $("rc_recImmStatusVal").textContent = pulse.quality === "good" ? "good" : (pulse.reason || pulse.quality);
-  diag("Immediate recovery capture: hr=" + pulse.hr + " rr=" + resp.rate + " quality=" + pulse.quality + " reason=\"" + (pulse.reason || "") + "\"");
+  diag("Immediate recovery capture: hr=" + pulse.hr + " rr=" + resp.rate + " quality=" + pulse.quality + " reason=\"" + (pulse.reason || "") + "\" respReason=\"" + (resp.reason || "") + "\"");
   $("rc_secRecovery60").classList.remove("locked");
   startWaitCountdown();
 });
@@ -6171,12 +6186,13 @@ $("rc_rec60Btn").addEventListener("click", async () => {
   const samples = await runPpgCapture(15000, $("rc_rec60Timer"));
   const pulse = analyzePulse(samples);
   const resp = analyzeRespiration(samples);
+  recordTrace("recovery60", samples);
   rec60 = { hr: pulse.hr, rr: resp.rate };
   $("rc_rec60Result").style.display = "grid";
   $("rc_rec60HrVal").textContent = pulse.hr != null ? pulse.hr.toFixed(0) + " bpm" : "—";
   $("rc_rec60RrVal").textContent = resp.rate != null ? resp.rate.toFixed(1) + "/min" : "—";
   $("rc_rec60StatusVal").textContent = pulse.quality === "good" ? "good" : (pulse.reason || pulse.quality);
-  diag("60s recovery capture: hr=" + pulse.hr + " rr=" + resp.rate + " quality=" + pulse.quality + " reason=\"" + (pulse.reason || "") + "\"");
+  diag("60s recovery capture: hr=" + pulse.hr + " rr=" + resp.rate + " quality=" + pulse.quality + " reason=\"" + (pulse.reason || "") + "\" respReason=\"" + (resp.reason || "") + "\"");
 
   const hrr = (recImm.hr != null && rec60.hr != null) ? (recImm.hr - rec60.hr) : null;
   const rrr = (recImm.rr != null && rec60.rr != null) ? (recImm.rr - rec60.rr) : null;
@@ -6257,6 +6273,18 @@ $("rc_exportBtn").addEventListener("click", () => {
   diag("CSV exported. trials=" + trials.length);
 });
 
+$("rc_exportTraceBtn").addEventListener("click", () => {
+  const header = ["capture_seq","trial","label","t_ms","raw_v"];
+  const rows = traceRows.map(r => [r.seq, r.trial, r.label, r.t_ms, r.raw_v].join(","));
+  const csv = [header.join(","), ...rows].join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `recovery-check-raw-trace-v${APP_VERSION}-${PLATFORM}-${Date.now()}.csv`;
+  a.click();
+  diag("Raw trace exported. samples=" + traceRows.length);
+});
+
 </script>
 
 <script type="module">
@@ -6264,7 +6292,7 @@ $("rc_exportBtn").addEventListener("click", () => {
 const $ = (id) => document.getElementById(id);
 const video = $("sm_video");
 
-const APP_VERSION = "1.0.3"; // 1.0.3: fixed step count reading 0 on the 2nd (and every later) trial in a session — the bout-complete handler unconditionally removed the devicemotion listener, and only the one-time "Enable Motion Sensor" button click re-attached it, which the "Start a new trial" reset flow never triggers again (it just re-enables the Bout button off the already-true motionGranted flag, so nothing on screen signaled anything was wrong). Fix: stop removing the listener at all, matching how the Walk Endurance panel already handles it — stepCount is reset to 0 at the start of every bout regardless, so leaving the listener attached across trials is safe. No detection/analysis logic touched otherwise. Was 1.0.2: diagnostics log now includes pulse.reason on every capture, not just hr/rr/quality. Was 1.0.1: fixed "Start a new trial" crashing with a JS error (unprefixed element ids in the reset handler). Was 1.0.0: initial spike build.
+const APP_VERSION = "1.0.4"; // 1.0.4: analyzeRespiration() now returns a reason string too (not just analyzePulse) — logged as respReason alongside the existing hr/rr/quality/reason fields on every capture; added an "Export raw trace" button that logs the raw fingertip-luminance signal (capture_seq/trial/label/t_ms/raw_v) for every baseline/post-bout capture this session, matching the pattern already used on Balance/STS/Blink-Rate/Chest Breathing — user-requested, to investigate why breathing-rate extraction fails much more often than heart-rate extraction on this signal. Logging/instrumentation only, no detection/analysis logic touched. Was 1.0.3: fixed step count reading 0 on the 2nd+ trial (devicemotion listener wasn't reattached after "Start a new trial"). Was 1.0.2: diagnostics log now includes pulse.reason on every capture. Was 1.0.1: fixed "Start a new trial" crashing with a JS error (unprefixed element ids in the reset handler). Was 1.0.0: initial spike build.
 const PLATFORM = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream ? "iOS"
   : /Android/.test(navigator.userAgent) ? "Android" : "Desktop";
 $("sm_verPill").textContent = "v" + APP_VERSION + " · " + PLATFORM;
@@ -6324,21 +6352,21 @@ function findPeaks(arr, ac, minRefractoryMs, minAmp) {
   return peaks;
 }
 function analyzeRespiration(arr) {
-  if (arr.length < 60) return { rate: null, peakCount: 0 };
+  if (arr.length < 60) return { rate: null, peakCount: 0, reason: "too few samples captured" };
   const smoothed = movingAverage(arr, 1500).map((v, i) => ({ t: arr[i].t, v }));
   const slowAc = detrend(smoothed, 12000);
   const spread = Math.max(...slowAc) - Math.min(...slowAc);
   const minAmp = spread * 0.2;
   const peaks = findPeaks(smoothed, slowAc, 1500, minAmp);
-  if (peaks.length < 2) return { rate: null, peakCount: peaks.length };
+  if (peaks.length < 2) return { rate: null, peakCount: peaks.length, reason: "too few breathing-cycle peaks detected" };
   const ibis = [];
   for (let i = 1; i < peaks.length; i++) {
     const ibi = peaks[i] - peaks[i - 1];
     if (ibi >= 1500 && ibi <= 10000) ibis.push(ibi);
   }
-  if (ibis.length < 1) return { rate: null, peakCount: peaks.length };
+  if (ibis.length < 1) return { rate: null, peakCount: peaks.length, reason: "no breath-to-breath interval fell in the plausible 6-40 breaths/min range" };
   const meanIbi = ibis.reduce((a, b) => a + b, 0) / ibis.length;
-  return { rate: 60000 / meanIbi, peakCount: peaks.length };
+  return { rate: 60000 / meanIbi, peakCount: peaks.length, reason: "" };
 }
 function analyzePulse(arr) {
   if (arr.length < 30) return { hr: null, hrv: null, peakCount: 0, quality: "no_signal", reason: "too few samples captured" };
@@ -6523,6 +6551,15 @@ let boutSteps = 0;
 let boutCadence = null;
 let post = { hr: null, rr: null };
 let trials = [];
+let traceRows = []; // accumulates across the whole session, like the raw-trace exports on Balance/STS/Blink-Rate/Chest Breathing
+let captureSeq = 0;
+function recordTrace(label, samples) {
+  captureSeq++;
+  const trialNum = trials.length + 1;
+  const t0 = samples.length ? samples[0].t : 0;
+  samples.forEach(s => traceRows.push({ seq: captureSeq, trial: trialNum, label, t_ms: Math.round(s.t - t0), raw_v: s.v.toFixed(3) }));
+  diag("Raw trace captured (" + label + "). seq=" + captureSeq + " samples=" + samples.length);
+}
 
 $("sm_startCameraBtn").addEventListener("click", async () => {
   try {
@@ -6540,12 +6577,13 @@ $("sm_baselineBtn").addEventListener("click", async () => {
   const samples = await runPpgCapture(20000, $("sm_baselineTimer"));
   const pulse = analyzePulse(samples);
   const resp = analyzeRespiration(samples);
+  recordTrace("baseline", samples);
   baseline = { hr: pulse.hr, rr: resp.rate };
   $("sm_baselineResult").style.display = "grid";
   $("sm_baseHrVal").textContent = pulse.hr != null ? pulse.hr.toFixed(0) + " bpm" : "—";
   $("sm_baseRrVal").textContent = resp.rate != null ? resp.rate.toFixed(1) + "/min" : "—";
   $("sm_baseStatusVal").textContent = pulse.quality === "good" ? "good" : (pulse.reason || pulse.quality);
-  diag("Baseline capture: hr=" + pulse.hr + " rr=" + resp.rate + " quality=" + pulse.quality + " reason=\"" + (pulse.reason || "") + "\"");
+  diag("Baseline capture: hr=" + pulse.hr + " rr=" + resp.rate + " quality=" + pulse.quality + " reason=\"" + (pulse.reason || "") + "\" respReason=\"" + (resp.reason || "") + "\"");
   $("sm_baselineHint").textContent = pulse.quality === "good"
     ? "Baseline captured. Move to step 2 when ready."
     : "Baseline reading wasn't clean (" + (pulse.reason || pulse.quality) + ") — you can retry or continue anyway.";
@@ -6587,12 +6625,13 @@ $("sm_postBtn").addEventListener("click", async () => {
   const samples = await runPpgCapture(15000, $("sm_postTimer"));
   const pulse = analyzePulse(samples);
   const resp = analyzeRespiration(samples);
+  recordTrace("post", samples);
   post = { hr: pulse.hr, rr: resp.rate };
   $("sm_postResult").style.display = "grid";
   $("sm_postHrVal").textContent = pulse.hr != null ? pulse.hr.toFixed(0) + " bpm" : "—";
   $("sm_postRrVal").textContent = resp.rate != null ? resp.rate.toFixed(1) + "/min" : "—";
   $("sm_postStatusVal").textContent = pulse.quality === "good" ? "good" : (pulse.reason || pulse.quality);
-  diag("Post-bout capture: hr=" + pulse.hr + " rr=" + resp.rate + " quality=" + pulse.quality + " reason=\"" + (pulse.reason || "") + "\"");
+  diag("Post-bout capture: hr=" + pulse.hr + " rr=" + resp.rate + " quality=" + pulse.quality + " reason=\"" + (pulse.reason || "") + "\" respReason=\"" + (resp.reason || "") + "\"");
 
   const hrResp = (baseline.hr != null && post.hr != null) ? (post.hr - baseline.hr) : null;
   const rrResp = (baseline.rr != null && post.rr != null) ? (post.rr - baseline.rr) : null;
@@ -6674,6 +6713,18 @@ $("sm_exportBtn").addEventListener("click", () => {
   a.download = `submaximal-fitness-web-spike-results-v${APP_VERSION}-${PLATFORM}-${Date.now()}.csv`;
   a.click();
   diag("CSV exported. trials=" + trials.length);
+});
+
+$("sm_exportTraceBtn").addEventListener("click", () => {
+  const header = ["capture_seq","trial","label","t_ms","raw_v"];
+  const rows = traceRows.map(r => [r.seq, r.trial, r.label, r.t_ms, r.raw_v].join(","));
+  const csv = [header.join(","), ...rows].join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `submaximal-fitness-raw-trace-v${APP_VERSION}-${PLATFORM}-${Date.now()}.csv`;
+  a.click();
+  diag("Raw trace exported. samples=" + traceRows.length);
 });
 
 </script>
