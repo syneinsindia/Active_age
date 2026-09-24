@@ -985,7 +985,7 @@ body.lightpanel { background: #ffffff; }
 </head>
 <body>
 
-<div id="buildBanner"><div class="inner" title="Build 40 · 2026-09-24 · Heart & Breath Recovery Check (rc panel, v1.0.4) + Guided Submaximal Fitness Test / Cardio Response Test (sm panel, v1.0.5): a real device session's raw trace (10 baseline captures) showed analyzeRespiration() had no equivalent of analyzePulse's coverage check — two breathing-cycle peaks clustered in the first ~5s of a 20s capture (finger/phone still settling) passed just as happily as two peaks spread across the whole reading, and one such case implied a physiologically-impossible 38.5 breaths/min. Fixed: peaks must now span at least half the capture, and the accepted rate range tightened from 6-40 to 7.5-30 breaths/min. Verified against that exact raw trace: both false positives from that session now correctly rejected with an honest reason instead of a fabricated number. No change to heart-rate detection or the underlying 2-peaks-minimum gate. Was Build 39: analyzeRespiration() now returns a reason string, logged as respReason; added an Export raw trace button on both panels. Was Build 38: fixed step count reading 0 on the 2nd+ trial.">Build 40 &middot; 2026-09-24 &middot; Recovery Check + Cardio Response Test: breathing-rate reading now rejects peaks clustered at the start of a capture instead of reporting them as a measurement</div></div>
+<div id="buildBanner"><div class="inner" title="Build 41 · 2026-09-24 · Heart & Breath Recovery Check (rc panel, v1.0.5) + Guided Submaximal Fitness Test / Cardio Response Test (sm panel, v1.0.6): a second real session's raw trace (9 more baseline captures, 6 with clean 'good' heart rate) showed Build 40's coverage-check fix wasn't enough on its own — 5 of those 6 clean captures still found 0-1 breathing peaks, and loosening the detection sensitivity (tested down to 1/4 of shipped) only surfaced more of the same clustered-near-the-start artifact pattern, not real recurring breathing. Baseline capture extended from 20s to 45s, and the minimum required breathing-cycle peaks raised from 2 to 3, giving real resting breathing (~9-15 cycles over 45s at a normal rate) room to clear a bar that isolated noise is much less likely to clear three times. Untested against a real capture yet — flagged as the natural next round rather than assumed to have worked. No change to heart-rate detection. Was Build 40: added the breathing-peaks coverage check and tightened the accepted rate range. Was Build 39: analyzeRespiration() now returns a reason string, logged as respReason; added an Export raw trace button on both panels.">Build 41 &middot; 2026-09-24 &middot; Recovery Check + Cardio Response Test: baseline capture extended to 45s and now requires 3 breathing cycles, not 2, to report a rate</div></div>
 
 <div class="page home-wrap" data-page="home">
 
@@ -1672,11 +1672,11 @@ body.lightpanel { background: #ffffff; }
 
 <section id="rc_secBaseline">
   <h2><span class="step-num">1</span> Baseline (resting) reading</h2>
-  <p class="hint">Sit still for a moment first. Turn your phone's flashlight on yourself (Control Center → flashlight icon on iPhone), then cover both the flash and the rear camera lens fully with your fingertip.</p>
+  <p class="hint">Sit still for a moment first. Turn your phone's flashlight on yourself (Control Center → flashlight icon on iPhone), then cover both the flash and the rear camera lens fully with your fingertip. This reading runs 45 seconds — longer than it used to — so there's time for a real breathing rate to register alongside heart rate, not just the pulse.</p>
   <div class="video-wrap"><video id="rc_video" autoplay playsinline muted></video></div>
   <div class="row">
     <button id="rc_startCameraBtn" class="btn-secondary">Start Camera</button>
-    <button id="rc_baselineBtn" class="btn-primary" disabled>Start Baseline Capture (20s)</button>
+    <button id="rc_baselineBtn" class="btn-primary" disabled>Start Baseline Capture (45s)</button>
   </div>
   <div class="big-timer" id="rc_baselineTimer">—</div>
   <div class="result-grid" id="rc_baselineResult" style="display:none;">
@@ -1781,11 +1781,11 @@ body.lightpanel { background: #ffffff; }
 
 <section id="sm_secBaseline">
   <h2><span class="step-num">1</span> Baseline (resting) reading</h2>
-  <p class="hint">Sit still for a moment first. Turn your phone's flashlight on yourself (Control Center → flashlight icon on iPhone), then cover both the flash and the rear camera lens fully with your fingertip.</p>
+  <p class="hint">Sit still for a moment first. Turn your phone's flashlight on yourself (Control Center → flashlight icon on iPhone), then cover both the flash and the rear camera lens fully with your fingertip. This reading runs 45 seconds — longer than it used to — so there's time for a real breathing rate to register alongside heart rate, not just the pulse.</p>
   <div class="video-wrap"><video id="sm_video" autoplay playsinline muted></video></div>
   <div class="row">
     <button id="sm_startCameraBtn" class="btn-secondary">Start Camera</button>
-    <button id="sm_baselineBtn" class="btn-primary" disabled>Start Baseline Capture (20s)</button>
+    <button id="sm_baselineBtn" class="btn-primary" disabled>Start Baseline Capture (45s)</button>
   </div>
   <div class="big-timer" id="sm_baselineTimer">—</div>
   <div class="result-grid" id="sm_baselineResult" style="display:none;">
@@ -5897,7 +5897,7 @@ $("s_exportBtn").addEventListener("click", () => {
 const $ = (id) => document.getElementById(id);
 const video = $("rc_video");
 
-const APP_VERSION = "1.0.4"; // 1.0.4: analyzeRespiration() now checks that detected breathing-cycle peaks span at least half the capture (mirrors analyzePulse's existing coverage check) and tightened the accepted rate range from 6-40 to 7.5-30 breaths/min — a real device session's raw trace (10 baseline captures) showed both of that session's "RR successes" were actually peaks clustered in the first ~5s of a 20s capture (likely finger/phone settling), one implying a physiologically-implausible 38.5 breaths/min; this closes both gaps rather than reporting that as a measurement. Verified against that exact raw trace before shipping: both false positives now correctly rejected with an honest reason. No change to the plausible-signal-exists gate (2+ peaks) or anything on the heart-rate side. Was 1.0.3: analyzeRespiration() now returns a reason string too, logged as respReason; added an "Export raw trace" button. Was 1.0.2: diagnostics log now includes pulse.reason on every capture. Was 1.0.1: fixed "Start a new trial" crashing with a JS error. Was 1.0.0: initial spike build.
+const APP_VERSION = "1.0.5"; // 1.0.5: baseline capture extended from 20s to 45s, and analyzeRespiration()'s minimum peak requirement raised from 2 to 3 — a second real session's raw trace (9 more baseline captures, 6 with clean "good" heart rate) showed 2 peaks was still too easy for a brief settling/contact blip to satisfy even after Build 40's coverage check: 5 of those 6 clean captures found 0-1 breathing peaks at the shipped sensitivity, and loosening the sensitivity threshold (tested down to 1/4 of shipped) only surfaced more of the same clustered-near-the-start pattern, not real recurring breathing. Longer capture + 3-cycle requirement gives real resting breathing (~9-15 cycles at 12-20/min over 45s) room to clear a bar that isolated noise is much less likely to clear three times. Untested against a real capture yet — that's the natural next round. No change to heart-rate detection. Was 1.0.4: added the coverage check and tightened rate range (6-40 to 7.5-30 breaths/min). Was 1.0.3: reason string + raw trace export. Was 1.0.2: diagnostics log now includes pulse.reason. Was 1.0.1: fixed "Start a new trial" crashing. Was 1.0.0: initial spike build.
 const PLATFORM = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream ? "iOS"
   : /Android/.test(navigator.userAgent) ? "Android" : "Desktop";
 $("rc_verPill").textContent = "v" + APP_VERSION + " · " + PLATFORM;
@@ -5963,7 +5963,15 @@ function analyzeRespiration(arr) {
   const spread = Math.max(...slowAc) - Math.min(...slowAc);
   const minAmp = spread * 0.2;
   const peaks = findPeaks(smoothed, slowAc, 1500, minAmp);
-  if (peaks.length < 2) return { rate: null, peakCount: peaks.length, reason: "too few breathing-cycle peaks detected" };
+  // Round 6/Build 41: raised from 2 to 3 required peaks, paired with
+  // extending the baseline capture from 20s to 45s. Two real sessions'
+  // worth of raw traces (15 captures total) showed 2 peaks was too easy for
+  // an isolated settling/contact blip to satisfy by chance, even after the
+  // Build 40 coverage check; a longer capture gives real, sustained resting
+  // breathing (roughly 9-15 real cycles at 12-20/min over 45s) room to
+  // clear a 3-cycle bar that isolated noise is much less likely to clear
+  // twice in a row.
+  if (peaks.length < 3) return { rate: null, peakCount: peaks.length, reason: "too few breathing-cycle peaks detected" };
   // Round 4/Build 40: mirrors analyzePulse's coverage check — without it, two
   // breathing-cycle peaks found only in, say, the first 4s of a 20s capture
   // (finger/phone still settling into position) passed this gate just as
@@ -6127,7 +6135,7 @@ $("rc_startCameraBtn").addEventListener("click", async () => {
 
 $("rc_baselineBtn").addEventListener("click", async () => {
   $("rc_baselineBtn").disabled = true;
-  const samples = await runPpgCapture(20000, $("rc_baselineTimer"));
+  const samples = await runPpgCapture(45000, $("rc_baselineTimer"));
   const pulse = analyzePulse(samples);
   const resp = analyzeRespiration(samples);
   recordTrace("baseline", samples);
@@ -6310,7 +6318,7 @@ $("rc_exportTraceBtn").addEventListener("click", () => {
 const $ = (id) => document.getElementById(id);
 const video = $("sm_video");
 
-const APP_VERSION = "1.0.5"; // 1.0.5: analyzeRespiration() now checks that detected breathing-cycle peaks span at least half the capture (mirrors analyzePulse's existing coverage check) and tightened the accepted rate range from 6-40 to 7.5-30 breaths/min — a real device session's raw trace (10 baseline captures on the paired Recovery Check panel, same shared code) showed both of that session's "RR successes" were actually peaks clustered in the first ~5s of a 20s capture (likely finger/phone settling), one implying a physiologically-implausible 38.5 breaths/min; this closes both gaps rather than reporting that as a measurement. Verified against that exact raw trace before shipping. No change to the plausible-signal-exists gate (2+ peaks) or anything on the heart-rate side. Was 1.0.4: analyzeRespiration() now returns a reason string too, logged as respReason; added an "Export raw trace" button. Was 1.0.3: fixed step count reading 0 on the 2nd+ trial. Was 1.0.2: diagnostics log now includes pulse.reason on every capture. Was 1.0.1: fixed "Start a new trial" crashing with a JS error. Was 1.0.0: initial spike build.
+const APP_VERSION = "1.0.6"; // 1.0.6: baseline capture extended from 20s to 45s, and analyzeRespiration()'s minimum peak requirement raised from 2 to 3 — a real session's raw trace (9 baseline captures, 6 with clean "good" heart rate) showed 2 peaks was still too easy for a brief settling/contact blip to satisfy even after Build 40's coverage check: 5 of those 6 clean captures found 0-1 breathing peaks at the shipped sensitivity, and loosening the sensitivity threshold (tested down to 1/4 of shipped) only surfaced more of the same clustered-near-the-start pattern, not real recurring breathing. Longer capture + 3-cycle requirement gives real resting breathing (~9-15 cycles at 12-20/min over 45s) room to clear a bar that isolated noise is much less likely to clear three times. Untested against a real capture yet — that's the natural next round. No change to heart-rate detection. Was 1.0.5: added the coverage check and tightened rate range. Was 1.0.4: reason string + raw trace export. Was 1.0.3: fixed step count reading 0 on the 2nd+ trial. Was 1.0.2: diagnostics log now includes pulse.reason. Was 1.0.1: fixed "Start a new trial" crashing. Was 1.0.0: initial spike build.
 const PLATFORM = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream ? "iOS"
   : /Android/.test(navigator.userAgent) ? "Android" : "Desktop";
 $("sm_verPill").textContent = "v" + APP_VERSION + " · " + PLATFORM;
@@ -6376,7 +6384,15 @@ function analyzeRespiration(arr) {
   const spread = Math.max(...slowAc) - Math.min(...slowAc);
   const minAmp = spread * 0.2;
   const peaks = findPeaks(smoothed, slowAc, 1500, minAmp);
-  if (peaks.length < 2) return { rate: null, peakCount: peaks.length, reason: "too few breathing-cycle peaks detected" };
+  // Round 6/Build 41: raised from 2 to 3 required peaks, paired with
+  // extending the baseline capture from 20s to 45s. Two real sessions'
+  // worth of raw traces (15 captures total) showed 2 peaks was too easy for
+  // an isolated settling/contact blip to satisfy by chance, even after the
+  // Build 40 coverage check; a longer capture gives real, sustained resting
+  // breathing (roughly 9-15 real cycles at 12-20/min over 45s) room to
+  // clear a 3-cycle bar that isolated noise is much less likely to clear
+  // twice in a row.
+  if (peaks.length < 3) return { rate: null, peakCount: peaks.length, reason: "too few breathing-cycle peaks detected" };
   // Round 4/Build 40: mirrors analyzePulse's coverage check — without it, two
   // breathing-cycle peaks found only in, say, the first 4s of a 20s capture
   // (finger/phone still settling into position) passed this gate just as
@@ -6610,7 +6626,7 @@ $("sm_startCameraBtn").addEventListener("click", async () => {
 
 $("sm_baselineBtn").addEventListener("click", async () => {
   $("sm_baselineBtn").disabled = true;
-  const samples = await runPpgCapture(20000, $("sm_baselineTimer"));
+  const samples = await runPpgCapture(45000, $("sm_baselineTimer"));
   const pulse = analyzePulse(samples);
   const resp = analyzeRespiration(samples);
   recordTrace("baseline", samples);
