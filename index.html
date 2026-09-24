@@ -985,7 +985,7 @@ body.lightpanel { background: #ffffff; }
 </head>
 <body>
 
-<div id="buildBanner"><div class="inner" title="Build 36 · 2026-09-24 · Heart & Breath Recovery Check (rc panel, v1.0.1) + Guided Submaximal Fitness Test / Cardio Response Test (sm panel, v1.0.1): fixed 'Start a new trial' crashing with a JS error on both panels (Cannot read properties of null, reading 'style') — a copy-paste bug where the reset handler referenced unprefixed element ids ('baselineResult','recImmResult','rec60Result'/'postResult') instead of the real rc_/sm_-prefixed ids, so the whole reset silently aborted after the first line: no fields cleared, sections not re-locked, buttons not reset. Confirmed via a real Android session's diagnostics (two identical uncaught errors at the exact reset-handler line, right after Trial saved). No detection/analysis logic touched on either panel. Was Build 35: Chest Breathing Scan (breath panel, v1.19.0): UI/layout only, no detection or analysis change. Start Camera and Start Capture now sit next to each other right under the video; the capture timer moved up to sit directly under the video frame instead of below the length/expected-rate fields; the always-open 'how to use' paragraph is now a collapsed How to use (read once) disclosure, matching the other panels; and a pre-existing CSS bug that left the hidden 40x40 processing canvas visibly rendering between the video and the buttons is fixed. Was Build 34: Chest Breathing Scan (v1.18.0): a result that clears the peakiness confidence gate now also has to survive a cross-check against a second, independent, crude time-domain cycle count before being reported as good.">Build 36 &middot; 2026-09-24 &middot; Recovery Check + Cardio Response Test: fixed "Start a new trial" crash (reset handler used unprefixed element ids)</div></div>
+<div id="buildBanner"><div class="inner" title="Build 37 · 2026-09-24 · Heart & Breath Recovery Check (rc panel, v1.0.2) + Guided Submaximal Fitness Test / Cardio Response Test (sm panel, v1.0.2): the diagnostics log now includes pulse.reason on every PPG capture, alongside the existing hr/rr/quality fields — a 'noisy' or 'no_signal' result used to give no clue why without re-deriving it from code; now it's in the exported log directly, matching what the Heart & Breath Signal and Heart Rate SQI+FFT panels already logged. Logging only, no detection/analysis logic touched. Was Build 36: Heart & Breath Recovery Check (rc panel, v1.0.1) + Guided Submaximal Fitness Test / Cardio Response Test (sm panel, v1.0.1): fixed 'Start a new trial' crashing with a JS error on both panels (Cannot read properties of null, reading 'style') — a copy-paste bug where the reset handler referenced unprefixed element ids instead of the real rc_/sm_-prefixed ids, so the whole reset silently aborted after the first line. Was Build 35: Chest Breathing Scan (breath panel, v1.19.0): UI/layout only, no detection or analysis change.">Build 37 &middot; 2026-09-24 &middot; Recovery Check + Cardio Response Test: diagnostics now log the reason behind a noisy/no_signal capture, not just the quality label</div></div>
 
 <div class="page home-wrap" data-page="home">
 
@@ -5893,7 +5893,7 @@ $("s_exportBtn").addEventListener("click", () => {
 const $ = (id) => document.getElementById(id);
 const video = $("rc_video");
 
-const APP_VERSION = "1.0.1"; // 1.0.1: fixed "Start a new trial" crashing with a JS error (Cannot read properties of null, reading 'style') — the reset handler referenced unprefixed element ids ("baselineResult" etc.) instead of the real rc_-prefixed ids, so $(id) returned null and the whole reset silently aborted after the first line. No detection/analysis logic touched. Was 1.0.0: initial spike build.
+const APP_VERSION = "1.0.2"; // 1.0.2: diagnostics log now includes pulse.reason on every capture (baseline/immediate/60s), not just hr/rr/quality — a "noisy"/"no_signal" result used to give no clue why without re-deriving it from code; now it's in the exported log directly. Logging only, no detection/analysis logic touched. Was 1.0.1: fixed "Start a new trial" crashing with a JS error (Cannot read properties of null, reading 'style') — the reset handler referenced unprefixed element ids ("baselineResult" etc.) instead of the real rc_-prefixed ids, so $(id) returned null and the whole reset silently aborted after the first line. Was 1.0.0: initial spike build.
 const PLATFORM = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream ? "iOS"
   : /Android/.test(navigator.userAgent) ? "Android" : "Desktop";
 $("rc_verPill").textContent = "v" + APP_VERSION + " · " + PLATFORM;
@@ -6104,7 +6104,7 @@ $("rc_baselineBtn").addEventListener("click", async () => {
   $("rc_baseHrVal").textContent = pulse.hr != null ? pulse.hr.toFixed(0) + " bpm" : "—";
   $("rc_baseRrVal").textContent = resp.rate != null ? resp.rate.toFixed(1) + "/min" : "—";
   $("rc_baseStatusVal").textContent = pulse.quality === "good" ? "good" : (pulse.reason || pulse.quality);
-  diag("Baseline capture: hr=" + pulse.hr + " rr=" + resp.rate + " quality=" + pulse.quality);
+  diag("Baseline capture: hr=" + pulse.hr + " rr=" + resp.rate + " quality=" + pulse.quality + " reason=\"" + (pulse.reason || "") + "\"");
   $("rc_baselineHint").textContent = pulse.quality === "good"
     ? "Baseline captured. Move to step 2 when ready."
     : "Baseline reading wasn't clean (" + (pulse.reason || pulse.quality) + ") — you can retry or continue anyway.";
@@ -6146,7 +6146,7 @@ $("rc_recImmBtn").addEventListener("click", async () => {
   $("rc_recImmHrVal").textContent = pulse.hr != null ? pulse.hr.toFixed(0) + " bpm" : "—";
   $("rc_recImmRrVal").textContent = resp.rate != null ? resp.rate.toFixed(1) + "/min" : "—";
   $("rc_recImmStatusVal").textContent = pulse.quality === "good" ? "good" : (pulse.reason || pulse.quality);
-  diag("Immediate recovery capture: hr=" + pulse.hr + " rr=" + resp.rate + " quality=" + pulse.quality);
+  diag("Immediate recovery capture: hr=" + pulse.hr + " rr=" + resp.rate + " quality=" + pulse.quality + " reason=\"" + (pulse.reason || "") + "\"");
   $("rc_secRecovery60").classList.remove("locked");
   startWaitCountdown();
 });
@@ -6176,7 +6176,7 @@ $("rc_rec60Btn").addEventListener("click", async () => {
   $("rc_rec60HrVal").textContent = pulse.hr != null ? pulse.hr.toFixed(0) + " bpm" : "—";
   $("rc_rec60RrVal").textContent = resp.rate != null ? resp.rate.toFixed(1) + "/min" : "—";
   $("rc_rec60StatusVal").textContent = pulse.quality === "good" ? "good" : (pulse.reason || pulse.quality);
-  diag("60s recovery capture: hr=" + pulse.hr + " rr=" + resp.rate + " quality=" + pulse.quality);
+  diag("60s recovery capture: hr=" + pulse.hr + " rr=" + resp.rate + " quality=" + pulse.quality + " reason=\"" + (pulse.reason || "") + "\"");
 
   const hrr = (recImm.hr != null && rec60.hr != null) ? (recImm.hr - rec60.hr) : null;
   const rrr = (recImm.rr != null && rec60.rr != null) ? (recImm.rr - rec60.rr) : null;
@@ -6264,7 +6264,7 @@ $("rc_exportBtn").addEventListener("click", () => {
 const $ = (id) => document.getElementById(id);
 const video = $("sm_video");
 
-const APP_VERSION = "1.0.1"; // 1.0.1: fixed "Start a new trial" crashing with the same JS error found in the Recovery Check panel (Cannot read properties of null, reading 'style') — the reset handler referenced unprefixed element ids ("baselineResult","postResult") instead of the real sm_-prefixed ids, so $(id) returned null and the whole reset silently aborted after the first line. No detection/analysis logic touched. Was 1.0.0: initial spike build.
+const APP_VERSION = "1.0.2"; // 1.0.2: diagnostics log now includes pulse.reason on every capture (baseline/post-bout), not just hr/rr/quality — matching the same change made to the Recovery Check panel. Logging only, no detection/analysis logic touched. Was 1.0.1: fixed "Start a new trial" crashing with the same JS error found in the Recovery Check panel (Cannot read properties of null, reading 'style') — the reset handler referenced unprefixed element ids ("baselineResult","postResult") instead of the real sm_-prefixed ids, so $(id) returned null and the whole reset silently aborted after the first line. Was 1.0.0: initial spike build.
 const PLATFORM = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream ? "iOS"
   : /Android/.test(navigator.userAgent) ? "Android" : "Desktop";
 $("sm_verPill").textContent = "v" + APP_VERSION + " · " + PLATFORM;
@@ -6545,7 +6545,7 @@ $("sm_baselineBtn").addEventListener("click", async () => {
   $("sm_baseHrVal").textContent = pulse.hr != null ? pulse.hr.toFixed(0) + " bpm" : "—";
   $("sm_baseRrVal").textContent = resp.rate != null ? resp.rate.toFixed(1) + "/min" : "—";
   $("sm_baseStatusVal").textContent = pulse.quality === "good" ? "good" : (pulse.reason || pulse.quality);
-  diag("Baseline capture: hr=" + pulse.hr + " rr=" + resp.rate + " quality=" + pulse.quality);
+  diag("Baseline capture: hr=" + pulse.hr + " rr=" + resp.rate + " quality=" + pulse.quality + " reason=\"" + (pulse.reason || "") + "\"");
   $("sm_baselineHint").textContent = pulse.quality === "good"
     ? "Baseline captured. Move to step 2 when ready."
     : "Baseline reading wasn't clean (" + (pulse.reason || pulse.quality) + ") — you can retry or continue anyway.";
@@ -6593,7 +6593,7 @@ $("sm_postBtn").addEventListener("click", async () => {
   $("sm_postHrVal").textContent = pulse.hr != null ? pulse.hr.toFixed(0) + " bpm" : "—";
   $("sm_postRrVal").textContent = resp.rate != null ? resp.rate.toFixed(1) + "/min" : "—";
   $("sm_postStatusVal").textContent = pulse.quality === "good" ? "good" : (pulse.reason || pulse.quality);
-  diag("Post-bout capture: hr=" + pulse.hr + " rr=" + resp.rate + " quality=" + pulse.quality);
+  diag("Post-bout capture: hr=" + pulse.hr + " rr=" + resp.rate + " quality=" + pulse.quality + " reason=\"" + (pulse.reason || "") + "\"");
 
   const hrResp = (baseline.hr != null && post.hr != null) ? (post.hr - baseline.hr) : null;
   const rrResp = (baseline.rr != null && post.rr != null) ? (post.rr - baseline.rr) : null;
