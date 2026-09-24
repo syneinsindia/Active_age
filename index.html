@@ -985,7 +985,7 @@ body.lightpanel { background: #ffffff; }
 </head>
 <body>
 
-<div id="buildBanner"><div class="inner" title="Build 41 · 2026-09-24 · Heart & Breath Recovery Check (rc panel, v1.0.5) + Guided Submaximal Fitness Test / Cardio Response Test (sm panel, v1.0.6): a second real session's raw trace (9 more baseline captures, 6 with clean 'good' heart rate) showed Build 40's coverage-check fix wasn't enough on its own — 5 of those 6 clean captures still found 0-1 breathing peaks, and loosening the detection sensitivity (tested down to 1/4 of shipped) only surfaced more of the same clustered-near-the-start artifact pattern, not real recurring breathing. Baseline capture extended from 20s to 45s, and the minimum required breathing-cycle peaks raised from 2 to 3, giving real resting breathing (~9-15 cycles over 45s at a normal rate) room to clear a bar that isolated noise is much less likely to clear three times. Untested against a real capture yet — flagged as the natural next round rather than assumed to have worked. No change to heart-rate detection. Was Build 40: added the breathing-peaks coverage check and tightened the accepted rate range. Was Build 39: analyzeRespiration() now returns a reason string, logged as respReason; added an Export raw trace button on both panels.">Build 41 &middot; 2026-09-24 &middot; Recovery Check + Cardio Response Test: baseline capture extended to 45s and now requires 3 breathing cycles, not 2, to report a rate</div></div>
+<div id="buildBanner"><div class="inner" title="Build 42 · 2026-09-24 · Heart & Breath Recovery Check (rc panel, v1.0.6) + Guided Submaximal Fitness Test / Cardio Response Test (sm panel, v1.0.7): a third real session's raw trace showed Build 41's longer-capture/more-peaks fix still didn't produce a real breathing reading — the detected peaks just relocated to a different part of the 45s capture, still a brief localized cluster rather than spread throughout, confirming this isn't a duration problem. After three independent real-device attempts (25+ captures, zero real detections, zero false positives), breathing rate is now treated in the product copy as a bonus-when-available reading rather than a required companion to heart rate: the baseline hint tells the user directly when heart rate is good but breathing rate wasn't detected that this is expected and not worth retrying for, and the recovery/response value text for the breathing-rate delta changed from 'not enough data' to 'not detected this session' — heart rate's own required-field wording is unchanged. Copy/UX only, no detection or analysis logic touched. Was Build 41: baseline capture extended 20s→45s, minimum breathing-cycle peaks raised 2→3. Was Build 40: added the breathing-peaks coverage check and tightened the accepted rate range.">Build 42 &middot; 2026-09-24 &middot; Recovery Check + Cardio Response Test: breathing rate is now a bonus-when-available reading, not a required one — copy updated so a blank reading doesn't read as a failure</div></div>
 
 <div class="page home-wrap" data-page="home">
 
@@ -1736,7 +1736,7 @@ body.lightpanel { background: #ffffff; }
   <div class="recovery-highlight">
     <div class="lbl">Breathing recovery (1 min)</div>
     <div class="val" id="rc_rrrVal">—</div>
-    <p class="hint" style="margin:0;">Same idea applied to respiratory rate. This pairing isn't a validated clinical index the way heart-rate recovery is — treat it as descriptive, not diagnostic.</p>
+    <p class="hint" style="margin:0;">Same idea applied to respiratory rate. This pairing isn't a validated clinical index the way heart-rate recovery is — treat it as descriptive, not diagnostic. Breathing rate is a bonus reading, not a required one: it isn't reliably captured from a fingertip camera on every device or every session, even when heart rate comes through perfectly clean. If it's blank, heart rate recovery above is still a complete, trustworthy result on its own — no need to keep retrying a capture just to chase a breathing number.</p>
   </div>
   <button id="rc_saveTrialBtn" class="btn-secondary">Save this trial to the log below</button>
   <button id="rc_resetBtn" class="btn-warn">Start a new trial</button>
@@ -1838,7 +1838,7 @@ body.lightpanel { background: #ffffff; }
   <div class="response-highlight">
     <div class="lbl">Breathing response</div>
     <div class="val" id="sm_rrRespVal">—</div>
-    <p class="hint" style="margin:0;">Same idea for breathing rate. Descriptive only.</p>
+    <p class="hint" style="margin:0;">Same idea for breathing rate. Descriptive only. Breathing rate is a bonus reading, not a required one: it isn't reliably captured from a fingertip camera on every device or every session, even when heart rate comes through perfectly clean. If it's blank, heart rate response above is still a complete, trustworthy result on its own — no need to keep retrying a capture just to chase a breathing number.</p>
   </div>
   <p class="hint" id="sm_cadenceComplianceNote"></p>
   <button id="sm_saveTrialBtn" class="btn-secondary">Save this trial to the log below</button>
@@ -5897,7 +5897,7 @@ $("s_exportBtn").addEventListener("click", () => {
 const $ = (id) => document.getElementById(id);
 const video = $("rc_video");
 
-const APP_VERSION = "1.0.5"; // 1.0.5: baseline capture extended from 20s to 45s, and analyzeRespiration()'s minimum peak requirement raised from 2 to 3 — a second real session's raw trace (9 more baseline captures, 6 with clean "good" heart rate) showed 2 peaks was still too easy for a brief settling/contact blip to satisfy even after Build 40's coverage check: 5 of those 6 clean captures found 0-1 breathing peaks at the shipped sensitivity, and loosening the sensitivity threshold (tested down to 1/4 of shipped) only surfaced more of the same clustered-near-the-start pattern, not real recurring breathing. Longer capture + 3-cycle requirement gives real resting breathing (~9-15 cycles at 12-20/min over 45s) room to clear a bar that isolated noise is much less likely to clear three times. Untested against a real capture yet — that's the natural next round. No change to heart-rate detection. Was 1.0.4: added the coverage check and tightened rate range (6-40 to 7.5-30 breaths/min). Was 1.0.3: reason string + raw trace export. Was 1.0.2: diagnostics log now includes pulse.reason. Was 1.0.1: fixed "Start a new trial" crashing. Was 1.0.0: initial spike build.
+const APP_VERSION = "1.0.6"; // 1.0.6: breathing rate (RR) is now treated as a bonus-when-available reading, not a required companion to heart rate — a third real session's raw trace confirmed the Build 41 duration/peak-count fix didn't produce a real reading either (the "extra" peaks it found just relocated to a different part of the capture, still a brief localized cluster, never spread throughout), so after three independent real-device attempts the decision was made to stop chasing this signal via retries and instead set expectations correctly: the baseline hint now tells the user directly when heart rate is good but breathing rate wasn't detected that this is common and not worth retrying for, the Results section explains the same, and the recovery/response value text changed from "not enough data" (reads as a failure) to "not detected this session" (reads as an expected, non-blocking outcome) specifically for the breathing-rate delta — heart rate's own "not enough data" wording is unchanged since heart rate remains required. Copy/UX only — no change to any detection or analysis logic. Was 1.0.5: baseline extended 20s→45s, peak requirement 2→3. Was 1.0.4: coverage check + tightened rate range. Was 1.0.3: reason string + raw trace export. Was 1.0.2: diagnostics log now includes pulse.reason. Was 1.0.1: fixed "Start a new trial" crashing. Was 1.0.0: initial spike build.
 const PLATFORM = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream ? "iOS"
   : /Android/.test(navigator.userAgent) ? "Android" : "Desktop";
 $("rc_verPill").textContent = "v" + APP_VERSION + " · " + PLATFORM;
@@ -6146,7 +6146,9 @@ $("rc_baselineBtn").addEventListener("click", async () => {
   $("rc_baseStatusVal").textContent = pulse.quality === "good" ? "good" : (pulse.reason || pulse.quality);
   diag("Baseline capture: hr=" + pulse.hr + " rr=" + resp.rate + " quality=" + pulse.quality + " reason=\"" + (pulse.reason || "") + "\" respReason=\"" + (resp.reason || "") + "\"");
   $("rc_baselineHint").textContent = pulse.quality === "good"
-    ? "Baseline captured. Move to step 2 when ready."
+    ? (resp.rate != null
+        ? "Baseline captured. Move to step 2 when ready."
+        : "Baseline captured — heart rate is good. Breathing rate wasn't detected this time, which is common and not a sign anything went wrong; no need to retry just for that. Move to step 2 when ready.")
     : "Baseline reading wasn't clean (" + (pulse.reason || pulse.quality) + ") — you can retry or continue anyway.";
   $("rc_secExertion").classList.remove("locked");
   $("rc_baselineBtn").disabled = false;
@@ -6223,7 +6225,7 @@ $("rc_rec60Btn").addEventListener("click", async () => {
   const hrr = (recImm.hr != null && rec60.hr != null) ? (recImm.hr - rec60.hr) : null;
   const rrr = (recImm.rr != null && rec60.rr != null) ? (recImm.rr - rec60.rr) : null;
   $("rc_hrrVal").textContent = hrr != null ? fmtDelta(hrr, 0) + " bpm" : "not enough data";
-  $("rc_rrrVal").textContent = rrr != null ? fmtDelta(rrr, 1) + "/min" : "not enough data";
+  $("rc_rrrVal").textContent = rrr != null ? fmtDelta(rrr, 1) + "/min" : "not detected this session";
   $("rc_secResults").classList.remove("locked");
 });
 
@@ -6318,7 +6320,7 @@ $("rc_exportTraceBtn").addEventListener("click", () => {
 const $ = (id) => document.getElementById(id);
 const video = $("sm_video");
 
-const APP_VERSION = "1.0.6"; // 1.0.6: baseline capture extended from 20s to 45s, and analyzeRespiration()'s minimum peak requirement raised from 2 to 3 — a real session's raw trace (9 baseline captures, 6 with clean "good" heart rate) showed 2 peaks was still too easy for a brief settling/contact blip to satisfy even after Build 40's coverage check: 5 of those 6 clean captures found 0-1 breathing peaks at the shipped sensitivity, and loosening the sensitivity threshold (tested down to 1/4 of shipped) only surfaced more of the same clustered-near-the-start pattern, not real recurring breathing. Longer capture + 3-cycle requirement gives real resting breathing (~9-15 cycles at 12-20/min over 45s) room to clear a bar that isolated noise is much less likely to clear three times. Untested against a real capture yet — that's the natural next round. No change to heart-rate detection. Was 1.0.5: added the coverage check and tightened rate range. Was 1.0.4: reason string + raw trace export. Was 1.0.3: fixed step count reading 0 on the 2nd+ trial. Was 1.0.2: diagnostics log now includes pulse.reason. Was 1.0.1: fixed "Start a new trial" crashing. Was 1.0.0: initial spike build.
+const APP_VERSION = "1.0.7"; // 1.0.7: breathing rate (RR) is now treated as a bonus-when-available reading, not a required companion to heart rate — a third real session's raw trace confirmed the Build 41 duration/peak-count fix didn't produce a real reading either (the "extra" peaks it found just relocated to a different part of the capture, still a brief localized cluster, never spread throughout), so after three independent real-device attempts the decision was made to stop chasing this signal via retries and instead set expectations correctly: the baseline hint now tells the user directly when heart rate is good but breathing rate wasn't detected that this is common and not worth retrying for, the Results section explains the same, and the response value text changed from "not enough data" (reads as a failure) to "not detected this session" (reads as an expected, non-blocking outcome) specifically for the breathing-rate delta — heart rate's own "not enough data" wording is unchanged since heart rate remains required. Copy/UX only — no change to any detection or analysis logic. Was 1.0.6: baseline extended 20s→45s, peak requirement 2→3. Was 1.0.5: coverage check + tightened rate range. Was 1.0.4: reason string + raw trace export. Was 1.0.3: fixed step count reading 0 on the 2nd+ trial. Was 1.0.2: diagnostics log now includes pulse.reason. Was 1.0.1: fixed "Start a new trial" crashing. Was 1.0.0: initial spike build.
 const PLATFORM = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream ? "iOS"
   : /Android/.test(navigator.userAgent) ? "Android" : "Desktop";
 $("sm_verPill").textContent = "v" + APP_VERSION + " · " + PLATFORM;
@@ -6637,7 +6639,9 @@ $("sm_baselineBtn").addEventListener("click", async () => {
   $("sm_baseStatusVal").textContent = pulse.quality === "good" ? "good" : (pulse.reason || pulse.quality);
   diag("Baseline capture: hr=" + pulse.hr + " rr=" + resp.rate + " quality=" + pulse.quality + " reason=\"" + (pulse.reason || "") + "\" respReason=\"" + (resp.reason || "") + "\"");
   $("sm_baselineHint").textContent = pulse.quality === "good"
-    ? "Baseline captured. Move to step 2 when ready."
+    ? (resp.rate != null
+        ? "Baseline captured. Move to step 2 when ready."
+        : "Baseline captured — heart rate is good. Breathing rate wasn't detected this time, which is common and not a sign anything went wrong; no need to retry just for that. Move to step 2 when ready.")
     : "Baseline reading wasn't clean (" + (pulse.reason || pulse.quality) + ") — you can retry or continue anyway.";
   $("sm_secBout").classList.remove("locked");
   $("sm_baselineBtn").disabled = false;
@@ -6688,7 +6692,7 @@ $("sm_postBtn").addEventListener("click", async () => {
   const hrResp = (baseline.hr != null && post.hr != null) ? (post.hr - baseline.hr) : null;
   const rrResp = (baseline.rr != null && post.rr != null) ? (post.rr - baseline.rr) : null;
   $("sm_hrRespVal").textContent = hrResp != null ? fmtDelta(hrResp, 0) + " bpm" : "not enough data";
-  $("sm_rrRespVal").textContent = rrResp != null ? fmtDelta(rrResp, 1) + "/min" : "not enough data";
+  $("sm_rrRespVal").textContent = rrResp != null ? fmtDelta(rrResp, 1) + "/min" : "not detected this session";
   const cadenceOff = boutCadence != null ? Math.abs(boutCadence - BOUT_BPM) : null;
   $("sm_cadenceComplianceNote").textContent = cadenceOff != null
     ? (cadenceOff > 15
