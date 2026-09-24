@@ -985,7 +985,7 @@ body.lightpanel { background: #ffffff; }
 </head>
 <body>
 
-<div id="buildBanner"><div class="inner" title="Build 39 · 2026-09-24 · Heart & Breath Recovery Check (rc panel, v1.0.3) + Guided Submaximal Fitness Test / Cardio Response Test (sm panel, v1.0.4), user-requested: analyzeRespiration() now returns a reason string on every capture, same as analyzePulse already did — logged as respReason in the diagnostics. Also added an 'Export raw trace' button on both panels, logging the raw fingertip-luminance signal (capture_seq/trial/label/t_ms/raw_v) for every capture this session, matching the pattern already used on Balance/STS/Blink-Rate/Chest Breathing — built to investigate why breathing-rate extraction fails much more often than heart-rate extraction on this signal, especially at rest. Logging/instrumentation only, no detection/analysis logic touched. Was Build 38: Cardio Response Test (sm panel, v1.0.3): fixed step count reading 0 on the 2nd+ trial in a session (devicemotion listener wasn't reattached after Start a new trial). Was Build 37: diagnostics log now includes pulse.reason on every PPG capture.">Build 39 &middot; 2026-09-24 &middot; Recovery Check + Cardio Response Test: breathing-rate failures now log a reason, plus a raw-trace export for investigating them</div></div>
+<div id="buildBanner"><div class="inner" title="Build 40 · 2026-09-24 · Heart & Breath Recovery Check (rc panel, v1.0.4) + Guided Submaximal Fitness Test / Cardio Response Test (sm panel, v1.0.5): a real device session's raw trace (10 baseline captures) showed analyzeRespiration() had no equivalent of analyzePulse's coverage check — two breathing-cycle peaks clustered in the first ~5s of a 20s capture (finger/phone still settling) passed just as happily as two peaks spread across the whole reading, and one such case implied a physiologically-impossible 38.5 breaths/min. Fixed: peaks must now span at least half the capture, and the accepted rate range tightened from 6-40 to 7.5-30 breaths/min. Verified against that exact raw trace: both false positives from that session now correctly rejected with an honest reason instead of a fabricated number. No change to heart-rate detection or the underlying 2-peaks-minimum gate. Was Build 39: analyzeRespiration() now returns a reason string, logged as respReason; added an Export raw trace button on both panels. Was Build 38: fixed step count reading 0 on the 2nd+ trial.">Build 40 &middot; 2026-09-24 &middot; Recovery Check + Cardio Response Test: breathing-rate reading now rejects peaks clustered at the start of a capture instead of reporting them as a measurement</div></div>
 
 <div class="page home-wrap" data-page="home">
 
@@ -5897,7 +5897,7 @@ $("s_exportBtn").addEventListener("click", () => {
 const $ = (id) => document.getElementById(id);
 const video = $("rc_video");
 
-const APP_VERSION = "1.0.3"; // 1.0.3: analyzeRespiration() now returns a reason string too (not just analyzePulse) — logged as respReason alongside the existing hr/rr/quality/reason fields on every capture; added an "Export raw trace" button that logs the raw fingertip-luminance signal (capture_seq/trial/label/t_ms/raw_v) for every baseline/immediate/60s capture this session, matching the pattern already used on Balance/STS/Blink-Rate/Chest Breathing — user-requested, to investigate why breathing-rate extraction fails much more often than heart-rate extraction on this signal. Logging/instrumentation only, no detection/analysis logic touched. Was 1.0.2: diagnostics log now includes pulse.reason on every capture. Was 1.0.1: fixed "Start a new trial" crashing with a JS error (unprefixed element ids in the reset handler). Was 1.0.0: initial spike build.
+const APP_VERSION = "1.0.4"; // 1.0.4: analyzeRespiration() now checks that detected breathing-cycle peaks span at least half the capture (mirrors analyzePulse's existing coverage check) and tightened the accepted rate range from 6-40 to 7.5-30 breaths/min — a real device session's raw trace (10 baseline captures) showed both of that session's "RR successes" were actually peaks clustered in the first ~5s of a 20s capture (likely finger/phone settling), one implying a physiologically-implausible 38.5 breaths/min; this closes both gaps rather than reporting that as a measurement. Verified against that exact raw trace before shipping: both false positives now correctly rejected with an honest reason. No change to the plausible-signal-exists gate (2+ peaks) or anything on the heart-rate side. Was 1.0.3: analyzeRespiration() now returns a reason string too, logged as respReason; added an "Export raw trace" button. Was 1.0.2: diagnostics log now includes pulse.reason on every capture. Was 1.0.1: fixed "Start a new trial" crashing with a JS error. Was 1.0.0: initial spike build.
 const PLATFORM = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream ? "iOS"
   : /Android/.test(navigator.userAgent) ? "Android" : "Desktop";
 $("rc_verPill").textContent = "v" + APP_VERSION + " · " + PLATFORM;
@@ -5964,12 +5964,30 @@ function analyzeRespiration(arr) {
   const minAmp = spread * 0.2;
   const peaks = findPeaks(smoothed, slowAc, 1500, minAmp);
   if (peaks.length < 2) return { rate: null, peakCount: peaks.length, reason: "too few breathing-cycle peaks detected" };
+  // Round 4/Build 40: mirrors analyzePulse's coverage check — without it, two
+  // breathing-cycle peaks found only in, say, the first 4s of a 20s capture
+  // (finger/phone still settling into position) passed this gate just as
+  // happily as two peaks spread across the whole capture. A real device
+  // session's raw trace showed exactly that: both of that session's "RR
+  // successes" were peaks clustered in the first ~5s with nothing for the
+  // remaining ~15s, and one of them implied 38.5 breaths/min — not a real
+  // resting rate. Requiring the peaks to span at least half the capture
+  // rejects that pattern instead of reporting it as a measurement.
+  const totalSpanMs = arr[arr.length - 1].t - arr[0].t;
+  const peakSpanMs = peaks[peaks.length - 1] - peaks[0];
+  const coverage = totalSpanMs > 0 ? peakSpanMs / totalSpanMs : 0;
+  if (coverage < 0.5) return { rate: null, peakCount: peaks.length, reason: "breathing cycles only found in part of the capture — keep still for the whole reading" };
   const ibis = [];
   for (let i = 1; i < peaks.length; i++) {
     const ibi = peaks[i] - peaks[i - 1];
-    if (ibi >= 1500 && ibi <= 10000) ibis.push(ibi);
+    // Round 4/Build 40: tightened from 6-40 to 7.5-30 breaths/min — 40 was
+    // wide enough to accept the same implausible 38.5bpm reading the
+    // coverage check above now also catches; keeping both is a deliberate
+    // belt-and-suspenders (coverage catches "not sustained", this catches
+    // "not physiologically plausible even if it had been sustained").
+    if (ibi >= 2000 && ibi <= 8000) ibis.push(ibi);
   }
-  if (ibis.length < 1) return { rate: null, peakCount: peaks.length, reason: "no breath-to-breath interval fell in the plausible 6-40 breaths/min range" };
+  if (ibis.length < 1) return { rate: null, peakCount: peaks.length, reason: "no breath-to-breath interval fell in the plausible 7.5-30 breaths/min range" };
   const meanIbi = ibis.reduce((a, b) => a + b, 0) / ibis.length;
   return { rate: 60000 / meanIbi, peakCount: peaks.length, reason: "" };
 }
@@ -6292,7 +6310,7 @@ $("rc_exportTraceBtn").addEventListener("click", () => {
 const $ = (id) => document.getElementById(id);
 const video = $("sm_video");
 
-const APP_VERSION = "1.0.4"; // 1.0.4: analyzeRespiration() now returns a reason string too (not just analyzePulse) — logged as respReason alongside the existing hr/rr/quality/reason fields on every capture; added an "Export raw trace" button that logs the raw fingertip-luminance signal (capture_seq/trial/label/t_ms/raw_v) for every baseline/post-bout capture this session, matching the pattern already used on Balance/STS/Blink-Rate/Chest Breathing — user-requested, to investigate why breathing-rate extraction fails much more often than heart-rate extraction on this signal. Logging/instrumentation only, no detection/analysis logic touched. Was 1.0.3: fixed step count reading 0 on the 2nd+ trial (devicemotion listener wasn't reattached after "Start a new trial"). Was 1.0.2: diagnostics log now includes pulse.reason on every capture. Was 1.0.1: fixed "Start a new trial" crashing with a JS error (unprefixed element ids in the reset handler). Was 1.0.0: initial spike build.
+const APP_VERSION = "1.0.5"; // 1.0.5: analyzeRespiration() now checks that detected breathing-cycle peaks span at least half the capture (mirrors analyzePulse's existing coverage check) and tightened the accepted rate range from 6-40 to 7.5-30 breaths/min — a real device session's raw trace (10 baseline captures on the paired Recovery Check panel, same shared code) showed both of that session's "RR successes" were actually peaks clustered in the first ~5s of a 20s capture (likely finger/phone settling), one implying a physiologically-implausible 38.5 breaths/min; this closes both gaps rather than reporting that as a measurement. Verified against that exact raw trace before shipping. No change to the plausible-signal-exists gate (2+ peaks) or anything on the heart-rate side. Was 1.0.4: analyzeRespiration() now returns a reason string too, logged as respReason; added an "Export raw trace" button. Was 1.0.3: fixed step count reading 0 on the 2nd+ trial. Was 1.0.2: diagnostics log now includes pulse.reason on every capture. Was 1.0.1: fixed "Start a new trial" crashing with a JS error. Was 1.0.0: initial spike build.
 const PLATFORM = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream ? "iOS"
   : /Android/.test(navigator.userAgent) ? "Android" : "Desktop";
 $("sm_verPill").textContent = "v" + APP_VERSION + " · " + PLATFORM;
@@ -6359,12 +6377,30 @@ function analyzeRespiration(arr) {
   const minAmp = spread * 0.2;
   const peaks = findPeaks(smoothed, slowAc, 1500, minAmp);
   if (peaks.length < 2) return { rate: null, peakCount: peaks.length, reason: "too few breathing-cycle peaks detected" };
+  // Round 4/Build 40: mirrors analyzePulse's coverage check — without it, two
+  // breathing-cycle peaks found only in, say, the first 4s of a 20s capture
+  // (finger/phone still settling into position) passed this gate just as
+  // happily as two peaks spread across the whole capture. A real device
+  // session's raw trace showed exactly that: both of that session's "RR
+  // successes" were peaks clustered in the first ~5s with nothing for the
+  // remaining ~15s, and one of them implied 38.5 breaths/min — not a real
+  // resting rate. Requiring the peaks to span at least half the capture
+  // rejects that pattern instead of reporting it as a measurement.
+  const totalSpanMs = arr[arr.length - 1].t - arr[0].t;
+  const peakSpanMs = peaks[peaks.length - 1] - peaks[0];
+  const coverage = totalSpanMs > 0 ? peakSpanMs / totalSpanMs : 0;
+  if (coverage < 0.5) return { rate: null, peakCount: peaks.length, reason: "breathing cycles only found in part of the capture — keep still for the whole reading" };
   const ibis = [];
   for (let i = 1; i < peaks.length; i++) {
     const ibi = peaks[i] - peaks[i - 1];
-    if (ibi >= 1500 && ibi <= 10000) ibis.push(ibi);
+    // Round 4/Build 40: tightened from 6-40 to 7.5-30 breaths/min — 40 was
+    // wide enough to accept the same implausible 38.5bpm reading the
+    // coverage check above now also catches; keeping both is a deliberate
+    // belt-and-suspenders (coverage catches "not sustained", this catches
+    // "not physiologically plausible even if it had been sustained").
+    if (ibi >= 2000 && ibi <= 8000) ibis.push(ibi);
   }
-  if (ibis.length < 1) return { rate: null, peakCount: peaks.length, reason: "no breath-to-breath interval fell in the plausible 6-40 breaths/min range" };
+  if (ibis.length < 1) return { rate: null, peakCount: peaks.length, reason: "no breath-to-breath interval fell in the plausible 7.5-30 breaths/min range" };
   const meanIbi = ibis.reduce((a, b) => a + b, 0) / ibis.length;
   return { rate: 60000 / meanIbi, peakCount: peaks.length, reason: "" };
 }
