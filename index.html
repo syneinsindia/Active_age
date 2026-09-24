@@ -614,6 +614,12 @@ body.lightpanel { background: #ffffff; }
 .panel-recovery .pill.ok { background: #e2f0e6; color: #2f6f4f; }
 .panel-recovery .pill.bad { background: #f7e3da; color: var(--warn); }
 .panel-recovery .pill.wait { background: #eee; color: var(--muted); }
+.panel-recovery .status-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+.panel-recovery .status-card { background: var(--paper); border: 1px solid var(--line); border-radius: 6px; padding: 8px; }
+.panel-recovery .status-card .lbl { color: var(--muted); font-size: 0.72rem; text-transform: uppercase; letter-spacing: .04em; }
+.panel-recovery .meter-track { background: #eee; border-radius: 999px; height: 10px; overflow: hidden; margin-top: 6px; }
+.panel-recovery .meter-fill { height: 100%; width: 0%; background: var(--muted); transition: width 0.15s linear, background 0.15s linear; }
+.panel-recovery .meter-caption { font-size: 0.72rem; color: var(--muted); margin-top: 4px; line-height: 1.4; }
 .panel-recovery .big-timer { font-family: var(--mono); font-size: 2.4rem; text-align: center; margin: 6px 0; font-weight: 700; }
 .panel-recovery .hint { font-size: 0.78rem; color: var(--muted); line-height: 1.5; margin: 6px 0 0; }
 .panel-recovery .result-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 8px; }
@@ -659,6 +665,12 @@ body.lightpanel { background: #ffffff; }
 .panel-submax .pill.ok { background: #e2f0e6; color: #2f6f4f; }
 .panel-submax .pill.bad { background: #f7e3da; color: var(--warn); }
 .panel-submax .pill.wait { background: #eee; color: var(--muted); }
+.panel-submax .status-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+.panel-submax .status-card { background: var(--paper); border: 1px solid var(--line); border-radius: 6px; padding: 8px; }
+.panel-submax .status-card .lbl { color: var(--muted); font-size: 0.72rem; text-transform: uppercase; letter-spacing: .04em; }
+.panel-submax .meter-track { background: #eee; border-radius: 999px; height: 10px; overflow: hidden; margin-top: 6px; }
+.panel-submax .meter-fill { height: 100%; width: 0%; background: var(--muted); transition: width 0.15s linear, background 0.15s linear; }
+.panel-submax .meter-caption { font-size: 0.72rem; color: var(--muted); margin-top: 4px; line-height: 1.4; }
 .panel-submax .big-timer { font-family: var(--mono); font-size: 2.4rem; text-align: center; margin: 6px 0; font-weight: 700; }
 .panel-submax .step-count { font-family: var(--mono); font-size: 1.5rem; text-align: center; margin: 4px 0; }
 .panel-submax .cadence { font-family: var(--mono); font-size: 1rem; text-align: center; margin: 0 0 8px; color: var(--muted); }
@@ -985,7 +997,7 @@ body.lightpanel { background: #ffffff; }
 </head>
 <body>
 
-<div id="buildBanner"><div class="inner" title="Build 42 · 2026-09-24 · Heart & Breath Recovery Check (rc panel, v1.0.6) + Guided Submaximal Fitness Test / Cardio Response Test (sm panel, v1.0.7): a third real session's raw trace showed Build 41's longer-capture/more-peaks fix still didn't produce a real breathing reading — the detected peaks just relocated to a different part of the 45s capture, still a brief localized cluster rather than spread throughout, confirming this isn't a duration problem. After three independent real-device attempts (25+ captures, zero real detections, zero false positives), breathing rate is now treated in the product copy as a bonus-when-available reading rather than a required companion to heart rate: the baseline hint tells the user directly when heart rate is good but breathing rate wasn't detected that this is expected and not worth retrying for, and the recovery/response value text for the breathing-rate delta changed from 'not enough data' to 'not detected this session' — heart rate's own required-field wording is unchanged. Copy/UX only, no detection or analysis logic touched. Was Build 41: baseline capture extended 20s→45s, minimum breathing-cycle peaks raised 2→3. Was Build 40: added the breathing-peaks coverage check and tightened the accepted rate range.">Build 42 &middot; 2026-09-24 &middot; Recovery Check + Cardio Response Test: breathing rate is now a bonus-when-available reading, not a required one — copy updated so a blank reading doesn't read as a failure</div></div>
+<div id="buildBanner"><div class="inner" title="Build 43 · 2026-09-24 · Heart & Breath Recovery Check (rc panel, v1.0.7) + Guided Submaximal Fitness Test / Cardio Response Test (sm panel, v1.0.8): ported the live coverage pill and contact-steadiness meter from Heart & Breath Signal (#heart) into both PPG-capture panels. Motivated by a real same-session, same-device comparison: this pair failed baseline capture 3/3 times ('too few heartbeats') while Heart & Breath Signal and Heart Rate SQI+FFT both succeeded on the very first try, minutes later, on the same finger. The working panels give real-time feedback during capture (a coverage pill showing covering-lens/not-covered/too-dark, an amplitude meter with a coaching caption — 'press firmer', 'hold still', 'good') so bad contact gets corrected as it happens; this pair previously captured blind and only reported pass/fail at the end. Both panels now run the same live-feedback loop, and their diagnostics gain the same Coverage-sample/Pulse-amplitude-sample/COVERAGE-LOST/WEAK-SIGNAL logging Heart & Breath Signal already had. No change to analyzePulse/analyzeRespiration detection logic, step counting, or metronome timing. Was Build 42: breathing rate (RR) is now a bonus-when-available reading, not a required one. Was Build 41: baseline capture extended 20s→45s, minimum breathing-cycle peaks raised 2→3. Was Build 40: added the breathing-peaks coverage check and tightened the accepted rate range.">Build 43 &middot; 2026-09-24 &middot; Recovery Check + Cardio Response Test: added the same live coverage/steadiness feedback Heart &amp; Breath Signal already has, so contact issues can be caught and fixed during capture</div></div>
 
 <div class="page home-wrap" data-page="home">
 
@@ -1672,8 +1684,16 @@ body.lightpanel { background: #ffffff; }
 
 <section id="rc_secBaseline">
   <h2><span class="step-num">1</span> Baseline (resting) reading</h2>
-  <p class="hint">Sit still for a moment first. Turn your phone's flashlight on yourself (Control Center → flashlight icon on iPhone), then cover both the flash and the rear camera lens fully with your fingertip. This reading runs 45 seconds — longer than it used to — so there's time for a real breathing rate to register alongside heart rate, not just the pulse.</p>
+  <p class="hint">Sit still for a moment first. Turn your phone's flashlight on yourself (Control Center → flashlight icon on iPhone), then cover both the flash and the rear camera lens fully with your fingertip. This reading runs 45 seconds — longer than it used to — so there's time for a real breathing rate to register alongside heart rate, not just the pulse. Watch the coverage and steadiness indicators below once the camera's on — they react within a couple seconds if contact or pressure drifts, for any of the captures in this test.</p>
   <div class="video-wrap"><video id="rc_video" autoplay playsinline muted></video></div>
+  <div class="status-grid">
+    <div class="status-card"><div class="lbl">Coverage</div><div id="rc_coveragePill"><span class="pill wait">show finger</span></div></div>
+    <div class="status-card" style="grid-column: span 2;">
+      <div class="lbl">Contact steadiness (live)</div>
+      <div class="meter-track"><div class="meter-fill" id="rc_ampMeterFill"></div></div>
+      <div class="meter-caption" id="rc_ampMeterCaption">—</div>
+    </div>
+  </div>
   <div class="row">
     <button id="rc_startCameraBtn" class="btn-secondary">Start Camera</button>
     <button id="rc_baselineBtn" class="btn-primary" disabled>Start Baseline Capture (45s)</button>
@@ -1781,8 +1801,16 @@ body.lightpanel { background: #ffffff; }
 
 <section id="sm_secBaseline">
   <h2><span class="step-num">1</span> Baseline (resting) reading</h2>
-  <p class="hint">Sit still for a moment first. Turn your phone's flashlight on yourself (Control Center → flashlight icon on iPhone), then cover both the flash and the rear camera lens fully with your fingertip. This reading runs 45 seconds — longer than it used to — so there's time for a real breathing rate to register alongside heart rate, not just the pulse.</p>
+  <p class="hint">Sit still for a moment first. Turn your phone's flashlight on yourself (Control Center → flashlight icon on iPhone), then cover both the flash and the rear camera lens fully with your fingertip. This reading runs 45 seconds — longer than it used to — so there's time for a real breathing rate to register alongside heart rate, not just the pulse. Watch the coverage and steadiness indicators below once the camera's on — they react within a couple seconds if contact or pressure drifts, for either capture in this test.</p>
   <div class="video-wrap"><video id="sm_video" autoplay playsinline muted></video></div>
+  <div class="status-grid">
+    <div class="status-card"><div class="lbl">Coverage</div><div id="sm_coveragePill"><span class="pill wait">show finger</span></div></div>
+    <div class="status-card" style="grid-column: span 2;">
+      <div class="lbl">Contact steadiness (live)</div>
+      <div class="meter-track"><div class="meter-fill" id="sm_ampMeterFill"></div></div>
+      <div class="meter-caption" id="sm_ampMeterCaption">—</div>
+    </div>
+  </div>
   <div class="row">
     <button id="sm_startCameraBtn" class="btn-secondary">Start Camera</button>
     <button id="sm_baselineBtn" class="btn-primary" disabled>Start Baseline Capture (45s)</button>
@@ -5897,7 +5925,7 @@ $("s_exportBtn").addEventListener("click", () => {
 const $ = (id) => document.getElementById(id);
 const video = $("rc_video");
 
-const APP_VERSION = "1.0.6"; // 1.0.6: breathing rate (RR) is now treated as a bonus-when-available reading, not a required companion to heart rate — a third real session's raw trace confirmed the Build 41 duration/peak-count fix didn't produce a real reading either (the "extra" peaks it found just relocated to a different part of the capture, still a brief localized cluster, never spread throughout), so after three independent real-device attempts the decision was made to stop chasing this signal via retries and instead set expectations correctly: the baseline hint now tells the user directly when heart rate is good but breathing rate wasn't detected that this is common and not worth retrying for, the Results section explains the same, and the recovery/response value text changed from "not enough data" (reads as a failure) to "not detected this session" (reads as an expected, non-blocking outcome) specifically for the breathing-rate delta — heart rate's own "not enough data" wording is unchanged since heart rate remains required. Copy/UX only — no change to any detection or analysis logic. Was 1.0.5: baseline extended 20s→45s, peak requirement 2→3. Was 1.0.4: coverage check + tightened rate range. Was 1.0.3: reason string + raw trace export. Was 1.0.2: diagnostics log now includes pulse.reason. Was 1.0.1: fixed "Start a new trial" crashing. Was 1.0.0: initial spike build.
+const APP_VERSION = "1.0.7"; // 1.0.7: ported the live coverage pill + contact-steadiness meter from Heart & Breath Signal (#heart) — a same-session, same-device comparison showed this panel failing baseline 3/3 times on "too few heartbeats" while Heart & Breath Signal and Heart Rate SQI+FFT both succeeded on the first try minutes later; the concrete difference was that those two give real-time feedback (a coverage pill, an amplitude meter with a coaching caption) during capture so bad contact can be corrected as it happens, while this panel captured blind and only reported pass/fail at the end. Both captures now run through the same live-feedback loop, and the diagnostics also gain the "Coverage sample"/"Pulse amplitude sample"/"COVERAGE LOST"/"WEAK SIGNAL" logging that panel already had, closing the gap where a failed capture here couldn't be explained the way one there could. No change to analyzePulse/analyzeRespiration detection logic — this is capture-time UX and diagnostics only. Was 1.0.6: breathing rate (RR) treated as bonus-when-available, not required. Was 1.0.5: baseline extended 20s→45s, peak requirement 2→3. Was 1.0.4: coverage check + tightened rate range. Was 1.0.3: reason string + raw trace export. Was 1.0.2: diagnostics log now includes pulse.reason. Was 1.0.1: fixed "Start a new trial" crashing. Was 1.0.0: initial spike build.
 const PLATFORM = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream ? "iOS"
   : /Android/.test(navigator.userAgent) ? "Android" : "Desktop";
 $("rc_verPill").textContent = "v" + APP_VERSION + " · " + PLATFORM;
@@ -6047,6 +6075,113 @@ const sampleCanvas = document.createElement("canvas");
 sampleCanvas.width = 32; sampleCanvas.height = 32;
 const sampleCtx = sampleCanvas.getContext("2d", { willReadFrequently: true });
 
+// ---- Live coverage + contact-steadiness feedback (Build 43) ----
+// Ported from Heart & Breath Signal (#heart panel), already proven on real
+// devices there: a live "covering lens / not covered / too dark" pill plus a
+// live pulse-amplitude meter with a coaching caption, both updated every
+// frame, so bad contact can be corrected *during* the capture instead of only
+// showing up as "noisy"/"no_signal" after the fact. Neither PPG panel in this
+// pair had any of this before — captures ran silently, blind, and the only
+// feedback was pass/fail at the very end. See the engineering spike log for
+// the real-session evidence that motivated this (same device, same finger,
+// this panel failing baseline 3/3 while Heart & Breath Signal and Heart Rate
+// SQI+FFT both succeeded on the first try minutes later).
+function readFrameStats() {
+  if (!video.videoWidth) return null;
+  sampleCtx.drawImage(video, 0, 0, sampleCanvas.width, sampleCanvas.height);
+  const data = sampleCtx.getImageData(0, 0, sampleCanvas.width, sampleCanvas.height).data;
+  let sumR = 0, sumB = 0, sumRSq = 0, n = 0;
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i], b = data[i + 2];
+    sumR += r; sumB += b; sumRSq += r * r; n++;
+  }
+  const meanR = sumR / n, meanB = sumB / n;
+  const variance = Math.max(0, sumRSq / n - meanR * meanR);
+  return { meanR, meanB, std: Math.sqrt(variance) };
+}
+// Same covered/uncovered classification validated cross-device on Heart &
+// Breath Signal: a finger pressed on the lit lens reads strongly red-dominant
+// (tissue/blood absorb blue-green light); anything else stays color-neutral.
+function classifyCoverage(stats) {
+  if (!stats) return null;
+  if (stats.meanR <= 12) return "bad";
+  const redness = stats.meanR / Math.max(stats.meanB, 1);
+  return (redness > 2.2 && stats.std < 60) ? "ok" : "wait";
+}
+function signalAmplitude(arr) {
+  if (arr.length < 10) return 0;
+  const ac = detrend(arr, 800);
+  return Math.max(...ac) - Math.min(...ac);
+}
+
+let capturing = false;
+let captureStartT = 0;
+let lastCoverageStatus = null;
+let lastStatsLogT = 0;
+let lastAmpStatus = null;
+let lastAmpLogT = 0;
+
+function coverageLoop() {
+  const stats = readFrameStats();
+  const status = classifyCoverage(stats);
+  if (status === "ok") $("rc_coveragePill").innerHTML = '<span class="pill ok">covering lens</span>';
+  else if (status === "wait") $("rc_coveragePill").innerHTML = '<span class="pill wait">not covered yet</span>';
+  else if (status === "bad") $("rc_coveragePill").innerHTML = '<span class="pill bad">too dark / no light</span>';
+  if (stats) {
+    const redness = (stats.meanR / Math.max(stats.meanB, 1)).toFixed(2);
+    const now = performance.now();
+    if (now - lastStatsLogT > 3000) {
+      lastStatsLogT = now;
+      diag("Coverage sample: state=" + (capturing ? "running" : "idle") + " status=" + status + " meanR=" + stats.meanR.toFixed(1) +
+        " meanB=" + stats.meanB.toFixed(1) + " redness=" + redness + " std=" + stats.std.toFixed(1));
+    }
+    if (capturing && status != null && status !== lastCoverageStatus) {
+      const elapsedS = ((performance.now() - captureStartT) / 1000).toFixed(1);
+      if (status !== "ok") {
+        diag("COVERAGE LOST at " + elapsedS + "s into capture (status=" + status + ", meanR=" + stats.meanR.toFixed(1) +
+          " meanB=" + stats.meanB.toFixed(1) + " redness=" + redness + " std=" + stats.std.toFixed(1) + ")");
+      } else {
+        diag("Coverage restored at " + elapsedS + "s into capture");
+      }
+    }
+  }
+  lastCoverageStatus = capturing ? status : null;
+  requestAnimationFrame(coverageLoop);
+}
+
+function updateAmpMeter(nowT, samples) {
+  if (!capturing || samples.length < 15) {
+    $("rc_ampMeterFill").style.width = "0%";
+    $("rc_ampMeterFill").style.background = "var(--muted)";
+    $("rc_ampMeterCaption").textContent = "—";
+    return;
+  }
+  const recent = samples.filter(s => s.t > nowT - 2000);
+  if (recent.length < 15) return;
+  const amp = signalAmplitude(recent);
+  const pct = Math.max(4, Math.min(100, (amp / 12) * 100));
+  $("rc_ampMeterFill").style.width = pct + "%";
+  let status, caption, color;
+  if (amp < 1.2) { status = "weak"; color = "var(--warn)"; caption = "too weak — press a little firmer, keep it flat"; }
+  else if (amp > 18) { status = "motion"; color = "var(--warn)"; caption = "too much movement — hold your hand and the phone still"; }
+  else { status = "good"; color = "#2f6f4f"; caption = "good — hold exactly like this"; }
+  $("rc_ampMeterFill").style.background = color;
+  $("rc_ampMeterCaption").textContent = caption;
+  if (nowT - lastAmpLogT > 2000) {
+    lastAmpLogT = nowT;
+    diag("Pulse amplitude sample: amp=" + amp.toFixed(2) + " status=" + status);
+  }
+  if (status !== lastAmpStatus) {
+    const elapsedS = ((nowT - captureStartT) / 1000).toFixed(1);
+    if (status !== "good") {
+      diag((status === "weak" ? "WEAK SIGNAL" : "MOTION/NOISE") + " at " + elapsedS + "s into capture (amp=" + amp.toFixed(2) + ")");
+    } else if (lastAmpStatus != null) {
+      diag("Signal steadied at " + elapsedS + "s into capture");
+    }
+    lastAmpStatus = status;
+  }
+}
+
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 async function openCamera() {
@@ -6093,12 +6228,23 @@ function runPpgCapture(durationMs, timerEl) {
   return new Promise((resolve) => {
     const samples = [];
     const t0 = performance.now();
+    capturing = true;
+    captureStartT = t0;
+    lastAmpStatus = null;
+    lastAmpLogT = 0;
+    lastCoverageStatus = null;
     function tick() {
       const now = performance.now();
       const elapsed = now - t0;
       samples.push({ t: now, v: sampleFrame() });
       if (timerEl) timerEl.textContent = Math.max(0, ((durationMs - elapsed) / 1000)).toFixed(1) + "s";
-      if (elapsed >= durationMs) { resolve(samples); return; }
+      updateAmpMeter(now, samples);
+      if (elapsed >= durationMs) {
+        capturing = false;
+        updateAmpMeter(now, []);
+        resolve(samples);
+        return;
+      }
       requestAnimationFrame(tick);
     }
     requestAnimationFrame(tick);
@@ -6127,6 +6273,7 @@ $("rc_startCameraBtn").addEventListener("click", async () => {
     await openCamera();
     $("rc_baselineBtn").disabled = false;
     $("rc_startCameraBtn").disabled = true;
+    coverageLoop();
   } catch (err) {
     diag("Camera open failed: " + err.message);
     alert("Couldn't open the camera: " + err.message);
@@ -6320,7 +6467,7 @@ $("rc_exportTraceBtn").addEventListener("click", () => {
 const $ = (id) => document.getElementById(id);
 const video = $("sm_video");
 
-const APP_VERSION = "1.0.7"; // 1.0.7: breathing rate (RR) is now treated as a bonus-when-available reading, not a required companion to heart rate — a third real session's raw trace confirmed the Build 41 duration/peak-count fix didn't produce a real reading either (the "extra" peaks it found just relocated to a different part of the capture, still a brief localized cluster, never spread throughout), so after three independent real-device attempts the decision was made to stop chasing this signal via retries and instead set expectations correctly: the baseline hint now tells the user directly when heart rate is good but breathing rate wasn't detected that this is common and not worth retrying for, the Results section explains the same, and the response value text changed from "not enough data" (reads as a failure) to "not detected this session" (reads as an expected, non-blocking outcome) specifically for the breathing-rate delta — heart rate's own "not enough data" wording is unchanged since heart rate remains required. Copy/UX only — no change to any detection or analysis logic. Was 1.0.6: baseline extended 20s→45s, peak requirement 2→3. Was 1.0.5: coverage check + tightened rate range. Was 1.0.4: reason string + raw trace export. Was 1.0.3: fixed step count reading 0 on the 2nd+ trial. Was 1.0.2: diagnostics log now includes pulse.reason. Was 1.0.1: fixed "Start a new trial" crashing. Was 1.0.0: initial spike build.
+const APP_VERSION = "1.0.8"; // 1.0.8: ported the live coverage pill + contact-steadiness meter from Heart & Breath Signal (#heart) — a same-session, same-device comparison showed this panel failing baseline 3/3 times on "too few heartbeats" while Heart & Breath Signal and Heart Rate SQI+FFT both succeeded on the first try minutes later; the concrete difference was that those two give real-time feedback (a coverage pill, an amplitude meter with a coaching caption) during capture so bad contact can be corrected as it happens, while this panel captured blind and only reported pass/fail at the end. Both baseline and post-bout captures now run through the same live-feedback loop, and the diagnostics also gain the "Coverage sample"/"Pulse amplitude sample"/"COVERAGE LOST"/"WEAK SIGNAL" logging that panel already had, closing the gap where a failed capture here couldn't be explained the way one there could. No change to analyzePulse/analyzeRespiration detection logic, step counting, or metronome timing — this is capture-time UX and diagnostics only. Was 1.0.7: breathing rate (RR) treated as bonus-when-available, not required. Was 1.0.6: baseline extended 20s→45s, peak requirement 2→3. Was 1.0.5: coverage check + tightened rate range. Was 1.0.4: reason string + raw trace export. Was 1.0.3: fixed step count reading 0 on the 2nd+ trial. Was 1.0.2: diagnostics log now includes pulse.reason. Was 1.0.1: fixed "Start a new trial" crashing. Was 1.0.0: initial spike build.
 const PLATFORM = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream ? "iOS"
   : /Android/.test(navigator.userAgent) ? "Android" : "Desktop";
 $("sm_verPill").textContent = "v" + APP_VERSION + " · " + PLATFORM;
@@ -6470,6 +6617,113 @@ const sampleCanvas = document.createElement("canvas");
 sampleCanvas.width = 32; sampleCanvas.height = 32;
 const sampleCtx = sampleCanvas.getContext("2d", { willReadFrequently: true });
 
+// ---- Live coverage + contact-steadiness feedback (Build 43) ----
+// Ported from Heart & Breath Signal (#heart panel), already proven on real
+// devices there: a live "covering lens / not covered / too dark" pill plus a
+// live pulse-amplitude meter with a coaching caption, both updated every
+// frame, so bad contact can be corrected *during* the capture instead of only
+// showing up as "noisy"/"no_signal" after the fact. Neither PPG panel in this
+// pair had any of this before — captures ran silently, blind, and the only
+// feedback was pass/fail at the very end. See the engineering spike log for
+// the real-session evidence that motivated this (same device, same finger,
+// this panel failing baseline 3/3 while Heart & Breath Signal and Heart Rate
+// SQI+FFT both succeeded on the first try minutes later).
+function readFrameStats() {
+  if (!video.videoWidth) return null;
+  sampleCtx.drawImage(video, 0, 0, sampleCanvas.width, sampleCanvas.height);
+  const data = sampleCtx.getImageData(0, 0, sampleCanvas.width, sampleCanvas.height).data;
+  let sumR = 0, sumB = 0, sumRSq = 0, n = 0;
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i], b = data[i + 2];
+    sumR += r; sumB += b; sumRSq += r * r; n++;
+  }
+  const meanR = sumR / n, meanB = sumB / n;
+  const variance = Math.max(0, sumRSq / n - meanR * meanR);
+  return { meanR, meanB, std: Math.sqrt(variance) };
+}
+// Same covered/uncovered classification validated cross-device on Heart &
+// Breath Signal: a finger pressed on the lit lens reads strongly red-dominant
+// (tissue/blood absorb blue-green light); anything else stays color-neutral.
+function classifyCoverage(stats) {
+  if (!stats) return null;
+  if (stats.meanR <= 12) return "bad";
+  const redness = stats.meanR / Math.max(stats.meanB, 1);
+  return (redness > 2.2 && stats.std < 60) ? "ok" : "wait";
+}
+function signalAmplitude(arr) {
+  if (arr.length < 10) return 0;
+  const ac = detrend(arr, 800);
+  return Math.max(...ac) - Math.min(...ac);
+}
+
+let capturing = false;
+let captureStartT = 0;
+let lastCoverageStatus = null;
+let lastStatsLogT = 0;
+let lastAmpStatus = null;
+let lastAmpLogT = 0;
+
+function coverageLoop() {
+  const stats = readFrameStats();
+  const status = classifyCoverage(stats);
+  if (status === "ok") $("sm_coveragePill").innerHTML = '<span class="pill ok">covering lens</span>';
+  else if (status === "wait") $("sm_coveragePill").innerHTML = '<span class="pill wait">not covered yet</span>';
+  else if (status === "bad") $("sm_coveragePill").innerHTML = '<span class="pill bad">too dark / no light</span>';
+  if (stats) {
+    const redness = (stats.meanR / Math.max(stats.meanB, 1)).toFixed(2);
+    const now = performance.now();
+    if (now - lastStatsLogT > 3000) {
+      lastStatsLogT = now;
+      diag("Coverage sample: state=" + (capturing ? "running" : "idle") + " status=" + status + " meanR=" + stats.meanR.toFixed(1) +
+        " meanB=" + stats.meanB.toFixed(1) + " redness=" + redness + " std=" + stats.std.toFixed(1));
+    }
+    if (capturing && status != null && status !== lastCoverageStatus) {
+      const elapsedS = ((performance.now() - captureStartT) / 1000).toFixed(1);
+      if (status !== "ok") {
+        diag("COVERAGE LOST at " + elapsedS + "s into capture (status=" + status + ", meanR=" + stats.meanR.toFixed(1) +
+          " meanB=" + stats.meanB.toFixed(1) + " redness=" + redness + " std=" + stats.std.toFixed(1) + ")");
+      } else {
+        diag("Coverage restored at " + elapsedS + "s into capture");
+      }
+    }
+  }
+  lastCoverageStatus = capturing ? status : null;
+  requestAnimationFrame(coverageLoop);
+}
+
+function updateAmpMeter(nowT, samples) {
+  if (!capturing || samples.length < 15) {
+    $("sm_ampMeterFill").style.width = "0%";
+    $("sm_ampMeterFill").style.background = "var(--muted)";
+    $("sm_ampMeterCaption").textContent = "—";
+    return;
+  }
+  const recent = samples.filter(s => s.t > nowT - 2000);
+  if (recent.length < 15) return;
+  const amp = signalAmplitude(recent);
+  const pct = Math.max(4, Math.min(100, (amp / 12) * 100));
+  $("sm_ampMeterFill").style.width = pct + "%";
+  let status, caption, color;
+  if (amp < 1.2) { status = "weak"; color = "var(--warn)"; caption = "too weak — press a little firmer, keep it flat"; }
+  else if (amp > 18) { status = "motion"; color = "var(--warn)"; caption = "too much movement — hold your hand and the phone still"; }
+  else { status = "good"; color = "#2f6f4f"; caption = "good — hold exactly like this"; }
+  $("sm_ampMeterFill").style.background = color;
+  $("sm_ampMeterCaption").textContent = caption;
+  if (nowT - lastAmpLogT > 2000) {
+    lastAmpLogT = nowT;
+    diag("Pulse amplitude sample: amp=" + amp.toFixed(2) + " status=" + status);
+  }
+  if (status !== lastAmpStatus) {
+    const elapsedS = ((nowT - captureStartT) / 1000).toFixed(1);
+    if (status !== "good") {
+      diag((status === "weak" ? "WEAK SIGNAL" : "MOTION/NOISE") + " at " + elapsedS + "s into capture (amp=" + amp.toFixed(2) + ")");
+    } else if (lastAmpStatus != null) {
+      diag("Signal steadied at " + elapsedS + "s into capture");
+    }
+    lastAmpStatus = status;
+  }
+}
+
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 async function openCamera() {
@@ -6516,12 +6770,23 @@ function runPpgCapture(durationMs, timerEl) {
   return new Promise((resolve) => {
     const samples = [];
     const t0 = performance.now();
+    capturing = true;
+    captureStartT = t0;
+    lastAmpStatus = null;
+    lastAmpLogT = 0;
+    lastCoverageStatus = null;
     function tick() {
       const now = performance.now();
       const elapsed = now - t0;
       samples.push({ t: now, v: sampleFrame() });
       if (timerEl) timerEl.textContent = Math.max(0, ((durationMs - elapsed) / 1000)).toFixed(1) + "s";
-      if (elapsed >= durationMs) { resolve(samples); return; }
+      updateAmpMeter(now, samples);
+      if (elapsed >= durationMs) {
+        capturing = false;
+        updateAmpMeter(now, []);
+        resolve(samples);
+        return;
+      }
       requestAnimationFrame(tick);
     }
     requestAnimationFrame(tick);
@@ -6620,6 +6885,7 @@ $("sm_startCameraBtn").addEventListener("click", async () => {
     await openCamera();
     $("sm_baselineBtn").disabled = false;
     $("sm_startCameraBtn").disabled = true;
+    coverageLoop();
   } catch (err) {
     diag("Camera open failed: " + err.message);
     alert("Couldn't open the camera: " + err.message);
