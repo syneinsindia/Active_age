@@ -985,7 +985,7 @@ body.lightpanel { background: #ffffff; }
 </head>
 <body>
 
-<div id="buildBanner"><div class="inner" title="Build 35 · 2026-09-23 · Chest Breathing Scan (breath panel, v1.19.0): UI/layout only, no detection or analysis change. Start Camera and Start Capture now sit next to each other right under the video; the capture timer moved up to sit directly under the video frame instead of below the length/expected-rate fields; the always-open 'how to use' paragraph is now a collapsed How to use (read once) disclosure, matching the other panels; and a pre-existing CSS bug that left the hidden 40x40 processing canvas visibly rendering between the video and the buttons is fixed. Was Build 34: Chest Breathing Scan (v1.18.0): a result that clears the peakiness confidence gate now also has to survive a cross-check against a second, independent, crude time-domain cycle count before being reported as good — catches a slow, large-amplitude drift (e.g. postural settling) being confidently mistaken for the real breathing rate. A large disagreement (2.2x, with real margin either side across every real session on record) downgrades the trial to noisy instead of reporting a confident-but-likely-wrong number. Was Build 33: Chest Breathing Scan (v1.17.0): speakDistanceGuidance now logs the exact text of every voice cue it actually speaks, plus the mid-capture drift ratio or setup-phase shoulderW that triggered it — pure instrumentation.">Build 35 &middot; 2026-09-23 &middot; Chest Breathing Scan: UI layout — timer under the video, Start Camera/Capture together, instructions collapsed into Help</div></div>
+<div id="buildBanner"><div class="inner" title="Build 36 · 2026-09-24 · Heart & Breath Recovery Check (rc panel, v1.0.1) + Guided Submaximal Fitness Test / Cardio Response Test (sm panel, v1.0.1): fixed 'Start a new trial' crashing with a JS error on both panels (Cannot read properties of null, reading 'style') — a copy-paste bug where the reset handler referenced unprefixed element ids ('baselineResult','recImmResult','rec60Result'/'postResult') instead of the real rc_/sm_-prefixed ids, so the whole reset silently aborted after the first line: no fields cleared, sections not re-locked, buttons not reset. Confirmed via a real Android session's diagnostics (two identical uncaught errors at the exact reset-handler line, right after Trial saved). No detection/analysis logic touched on either panel. Was Build 35: Chest Breathing Scan (breath panel, v1.19.0): UI/layout only, no detection or analysis change. Start Camera and Start Capture now sit next to each other right under the video; the capture timer moved up to sit directly under the video frame instead of below the length/expected-rate fields; the always-open 'how to use' paragraph is now a collapsed How to use (read once) disclosure, matching the other panels; and a pre-existing CSS bug that left the hidden 40x40 processing canvas visibly rendering between the video and the buttons is fixed. Was Build 34: Chest Breathing Scan (v1.18.0): a result that clears the peakiness confidence gate now also has to survive a cross-check against a second, independent, crude time-domain cycle count before being reported as good.">Build 36 &middot; 2026-09-24 &middot; Recovery Check + Cardio Response Test: fixed "Start a new trial" crash (reset handler used unprefixed element ids)</div></div>
 
 <div class="page home-wrap" data-page="home">
 
@@ -5893,7 +5893,7 @@ $("s_exportBtn").addEventListener("click", () => {
 const $ = (id) => document.getElementById(id);
 const video = $("rc_video");
 
-const APP_VERSION = "1.0.0";
+const APP_VERSION = "1.0.1"; // 1.0.1: fixed "Start a new trial" crashing with a JS error (Cannot read properties of null, reading 'style') — the reset handler referenced unprefixed element ids ("baselineResult" etc.) instead of the real rc_-prefixed ids, so $(id) returned null and the whole reset silently aborted after the first line. No detection/analysis logic touched. Was 1.0.0: initial spike build.
 const PLATFORM = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream ? "iOS"
   : /Android/.test(navigator.userAgent) ? "Android" : "Desktop";
 $("rc_verPill").textContent = "v" + APP_VERSION + " · " + PLATFORM;
@@ -6200,7 +6200,7 @@ $("rc_saveTrialBtn").addEventListener("click", () => {
 $("rc_resetBtn").addEventListener("click", () => {
   baseline = { hr: null, rr: null }; recImm = { hr: null, rr: null }; rec60 = { hr: null, rr: null };
   exertionDurS = null; exertionEndT = null;
-  ["baselineResult","recImmResult","rec60Result"].forEach(id => $(id).style.display = "none");
+  ["rc_baselineResult","rc_recImmResult","rc_rec60Result"].forEach(id => $(id).style.display = "none");
   $("rc_hrrVal").textContent = "—"; $("rc_rrrVal").textContent = "—";
   $("rc_secExertion").classList.add("locked");
   $("rc_secRecoveryImm").classList.add("locked");
@@ -6264,7 +6264,7 @@ $("rc_exportBtn").addEventListener("click", () => {
 const $ = (id) => document.getElementById(id);
 const video = $("sm_video");
 
-const APP_VERSION = "1.0.0";
+const APP_VERSION = "1.0.1"; // 1.0.1: fixed "Start a new trial" crashing with the same JS error found in the Recovery Check panel (Cannot read properties of null, reading 'style') — the reset handler referenced unprefixed element ids ("baselineResult","postResult") instead of the real sm_-prefixed ids, so $(id) returned null and the whole reset silently aborted after the first line. No detection/analysis logic touched. Was 1.0.0: initial spike build.
 const PLATFORM = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream ? "iOS"
   : /Android/.test(navigator.userAgent) ? "Android" : "Desktop";
 $("sm_verPill").textContent = "v" + APP_VERSION + " · " + PLATFORM;
@@ -6622,7 +6622,7 @@ $("sm_saveTrialBtn").addEventListener("click", () => {
 $("sm_resetBtn").addEventListener("click", () => {
   baseline = { hr: null, rr: null }; post = { hr: null, rr: null };
   boutDurS = null; boutSteps = 0; boutCadence = null;
-  ["baselineResult","postResult"].forEach(id => $(id).style.display = "none");
+  ["sm_baselineResult","sm_postResult"].forEach(id => $(id).style.display = "none");
   $("sm_hrRespVal").textContent = "—"; $("sm_rrRespVal").textContent = "—"; $("sm_cadenceComplianceNote").textContent = "";
   $("sm_secBout").classList.add("locked");
   $("sm_secPost").classList.add("locked");
